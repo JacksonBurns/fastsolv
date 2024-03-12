@@ -89,6 +89,52 @@ Overall test r2 = 0.882762 +/- 0.000000
 Elapsed time = 0:04:37
 ```
 
+If we drop all datapoints where the solubility is less than 1 mol/L, performance changes dramatically.
+
+For `fastprop`:
+```
+[03/12/2024 01:23:35 PM fastprop.fastprop_core] INFO: Displaying validation results:
+                     count      mean       std       min       25%       50%       75%       max
+validation_mse_loss    4.0  0.257756  0.094608  0.151753  0.192381  0.263613  0.328988  0.352045
+validation_r2          4.0  0.714407  0.127950  0.599541  0.605701  0.715413  0.824119  0.827263
+validation_mape        4.0  1.281281  0.630359  0.550676  0.859609  1.356428  1.778099  1.861591
+validation_wmape       4.0  0.257741  0.067712  0.192016  0.215704  0.245380  0.287417  0.348188
+validation_l1          4.0  0.116890  0.028396  0.081056  0.103550  0.119001  0.132341  0.148505
+validation_mdae        4.0  0.083636  0.034056  0.043839  0.069830  0.081935  0.095741  0.126836
+validation_rmse        4.0  0.166500  0.032278  0.130036  0.144165  0.169537  0.191872  0.196892
+[03/12/2024 01:23:35 PM fastprop.fastprop_core] INFO: Displaying testing results:
+               count      mean       std       min       25%       50%       75%       max
+test_mse_loss    4.0  0.265054  0.066032  0.182714  0.227933  0.273366  0.310487  0.330772
+test_r2          4.0  0.708471  0.075085  0.615578  0.668376  0.714235  0.754330  0.789837
+test_mape        4.0  2.460535  1.070645  1.086656  1.975646  2.564792  3.049682  3.625901
+test_wmape       4.0  0.250249  0.037491  0.195151  0.244520  0.263510  0.269238  0.278824
+test_l1          4.0  0.116859  0.017160  0.091285  0.115636  0.124012  0.125235  0.128125
+test_mdae        4.0  0.081192  0.018433  0.057189  0.072727  0.083629  0.092093  0.100319
+test_rmse        4.0  0.170068  0.022425  0.142686  0.156965  0.172303  0.185406  0.192982
+[03/12/2024 01:23:35 PM fastprop.fastprop_core] INFO: 2-sided T-test between validation and testing rmse yielded p value of p=0.862>0.05.
+[03/12/2024 01:23:35 PM fastprop.cli.fastprop_cli] INFO: If you use fastprop in published work, please cite: ...WIP...
+[03/12/2024 01:23:35 PM fastprop.cli.fastprop_cli] INFO: Total elapsed time: 0:01:48.665913
+```
+
+and for chemprop:
+```
+Moving model to cuda
+Model 0 test rmse = 0.266730                                                                                                                                                                                                                                      
+Model 0 test mae = 0.202236
+Model 0 test r2 = 0.329536
+Ensemble test rmse = 0.266730
+Ensemble test mae = 0.202236
+Ensemble test r2 = 0.329536
+1-fold cross validation
+        Seed 0 ==> test rmse = 0.266730
+        Seed 0 ==> test mae = 0.202236
+        Seed 0 ==> test r2 = 0.329536
+Overall test rmse = 0.266730 +/- 0.000000
+Overall test mae = 0.202236 +/- 0.000000
+Overall test r2 = 0.329536 +/- 0.000000
+Elapsed time = 0:00:49
+```
+
 # Declarations
 
 ## Availability of data and materials

@@ -26,6 +26,8 @@ high_T_data: pd.DataFrame = pd.read_csv(os.path.join(_src_dir, "CombiSolu-Exp.cs
 all_data: pd.DataFrame = pd.concat((room_T_data, high_T_data))
 # drop those missing the solubility
 all_data: pd.DataFrame = all_data[all_data['experimental_logS [mol/L]'].notna()]
+# drop not-very-soluble species (must be at least 1 mol/L)
+# all_data: pd.DataFrame = all_data[all_data['experimental_logS [mol/L]'] > 0]
 
 # find all the unique molecules in the dataset and calculate their descriptors
 unique_smiles: np.ndarray = np.hstack((pd.unique(all_data["solvent_smiles"]), pd.unique(all_data["solute_smiles"])))
