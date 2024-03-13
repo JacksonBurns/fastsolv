@@ -97,6 +97,43 @@ Overall test r2 = 0.882762 +/- 0.000000
 Elapsed time = 0:04:37
 ```
 
+Optimized Chemprop results:
+```Best trial, with seed 164
+{'depth': 6, 'dropout': 0.0, 'ffn_num_layers': 3, 'linked_hidden_size': 1400}
+num params: 14,513,801
+Elapsed time = 19:41:28
+
+Overall test rmse = 0.373272 +/- 0.000000
+Overall test mae = 0.279181 +/- 0.000000
+Overall test r2 = 0.940946 +/- 0.000000
+Elapsed time = 0:10:31
+```
+
+and with repetitions:
+```
+Overall test rmse = 0.373272 +/- 0.000000
+Overall test mae = 0.279181 +/- 0.000000
+Overall test r2 = 0.940946 +/- 0.000000
+Elapsed time = 0:10:42
+
+Overall test rmse = 0.375874 +/- 0.000000
+Overall test mae = 0.270744 +/- 0.000000
+Overall test r2 = 0.937207 +/- 0.000000
+Elapsed time = 0:10:39
+
+Overall test rmse = 0.398474 +/- 0.000000
+Overall test mae = 0.294095 +/- 0.000000
+Overall test r2 = 0.922584 +/- 0.000000
+Elapsed time = 0:10:36
+
+Overall test rmse = 0.446716 +/- 0.000000
+Overall test mae = 0.330963 +/- 0.000000
+Overall test r2 = 0.908125 +/- 0.000000
+Elapsed time = 0:10:37
+```
+
+# High Solubility Region
+
 If we drop all datapoints where the solubility is less than 1 mol/L, performance changes dramatically.
 
 For `fastprop`:
