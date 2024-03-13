@@ -41,7 +41,15 @@ note: |
  This paper has been copied from github.com/JacksonBurns/fastprop (and modified).
 ---
 
-# Abstract
+# Summary
+ 1. Experimentalists find it useful to know the solubility of a solid in a solvent _a-priori_ to aid with synthesis.
+ 2. Prior experimental data with known solubilities is both highly dispersed in the literature and incomplete.
+ 3. This forces experimentalists to rely on models like the Abraham Solvation model to get an estimate of the solubility (which is also limited by the experimental data from which the model was derived) or as a lost resort simple empirical work which is time consuming.
+ 4. Predicting solubility for _arbitrary_ pairs of solid solutes and liquid solvents at _arbitrary_ temperatures was then of course a perfect setting for Artificial Intelligence (AI), which in theory could learn the underlying physics dictating the solubility and make predictions outside of its experimental training.
+ 5. Previous efforts by Vermeire et al. [@vermeire_solublility] used a combination of three D-MPNN models (via Chemprop [@chemprop_theory; @chemprop_software]) to predict the solubility: one which directly predicted solubility at room temperature and two others which predicted other thermodynamic properties needed to complete a thermocycle to adjust that initial prediction to the desired temperature. The best-case performance from that study was an RMSE of 0.44 and an MAE of 0.29.
+ 6. We have demonstrated that we can instead train a model which takes the temperature as an extra feature concatenated to the solvent and solute learned representations that outperforms the reference study after hyperparameter optimization. Performance metrics: ... 
+ 7. Even more noteworthy is that an alternative model architecture `fastprop` (GitHub.com/JacksonBurns/fastprop) is able to outperform both of these models using only classical molecular descriptors for the solute and solvent, again with the temperature concatenated. Performance metrics: ... (include (W)MAPE).
+ 8. Separately from the pure improvement of the model is the interest in the 'high solubility' domain. It is often most interesting to identify which solvents are the _best_ at dissolving a given solid, so it is critical for the models to be especially accurate in this region of the data (are they?).
 
 # Results and Discussion
 
@@ -70,7 +78,7 @@ test_rmse        4.0  0.231165  0.060701  0.178544  0.201060  0.213808  0.243913
 [03/12/2024 12:56:40 PM fastprop.cli.fastprop_cli] INFO: Total elapsed time: 0:05:58.338315
 ```
 
-Out of the box Chemprop [@chemprop_theory; @chemprop_software] results:
+Out of the box Chemprop results:
 ```
 Moving model to cuda
 Model 0 test rmse = 0.525936                                                                                                                                                                                                                                      
