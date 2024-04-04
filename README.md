@@ -37,3 +37,18 @@ We can have two splitting approaches:
  - no temperature should appear in all splits, no molecules (either solvent or solute) should appear in all splits - to deal with this (1) generate a list of all molecules (2) split _that_ list (3) generate all pairs of molecules in the training split (4) assemble the actual training data by looking up all of those combinations that are actually in the dataset (as long as the data is evenly sparse, this should be ok).
 
 **Solubility is log-transformed (base 10)**
+
+## Follow-Up from Initial Proposal Notes
+There are a ton of methods to predict solubility of organics in water (and probably common solvents, like octanol: https://www.sciencedirect.com/science/article/abs/pii/S002235491531025X) -> there are fewer methods to predict in arbitrary solvent -> even fewer to predict in arbitrary solvent at arbitrary temperature
+Group contribution methods are abundant for the first one
+second one: Common approach is fitting to experimental data, like the Abraham Solvation model or this paper: https://www.sciencedirect.com/science/article/abs/pii/S0022354915327301 which builds on that model
+third one seems to be basically only done with ML, see this predecessor to Vermeire's work: https://link.springer.com/article/10.1186/s13321-021-00575-3 though I did find one interesting paper that does it with UniFac (!!) https://pubs.acs.org/doi/full/10.1021/ie011014w
+I have thought more about interaction blocks and have grown very skeptical. Here's my thought process:
+we have two representations for two molecules (learned or descriptors) that we know are physically interacting with eachother.
+We want the FNN to learn this interaction, and specifically how it correlates to the solubility.
+The interaction between the features could be any linear or nonlinear function.
+Key: there is no mathematical interaction we can enforce that the network would be unable to learn on its own since NNs are universal function approximators
+example: if the 'correct' (heavy quotes) interaction between the solute and the solvent was multiplication of each feature by the corresponding one in the other molecule, the NN could readily learn this. There is no point in doing this manually, except to perhaps make the task easier for the network. Critically, existing methods actually make the task harder by keeping the un-interacted representations, making the total parameter space larger.
+Using an 'interaction block' only increases the parameter space unless you actually replace the features with the interaction, which we know we shouldn't do because no mathematical operation we can do would include non-linear interactions.
+I propose that we try some interaction blocks, if only to prove that they just make the task harder, and the network just ends up learning based on the un-interacted input.
+We can do this by looking at the feature importance's of the inputs of the FNN or by just comparing the performance values.
