@@ -34,11 +34,6 @@ note: |
  This paper has been copied from github.com/JacksonBurns/fastprop (and modified).
 ---
 
-Notes from 4/3
-- Look for other temperature dependent models
-- Look for any models that have directly trained on Florence's dataset
-- Consider other approaches to interact solute and solvent in a tabular/molecular descriptor feature rep.
-
 # Scientific Goal:
 The solubilities of drug-like molecules in non-aqueous organic solvents are crucial properties for drug substance and drug product manufacturing.
 Experimentally measuring non-aqueous solid solubility requires notoriously tedious experiments which are both time-consuming and resource-intensive.
