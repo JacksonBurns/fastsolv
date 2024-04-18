@@ -38,33 +38,40 @@ Notes from 4/3
 - Look for other temperature dependent models
 - Look for any models that have directly trained on Florence's dataset
 - Consider other approaches to interact solute and solvent in a tabular/molecular descriptor feature rep.
-  
+
+# Scientific Goal:
 The solubilities of drug-like molecules in non-aqueous organic solvents are crucial properties for drug substance and drug product manufacturing.
 Experimentally measuring non-aqueous solid solubility requires notoriously tedious experiments which are both time-consuming and resource-intensive.
 Thus, predicting organic solubility of drug-like molecules _a-priori_ based on their structure alone has been an active and robust area of academic and industrial research.
 The traditional approach relies on empirical solubility models like the Abraham Solvation model to estimate solubility.
 However, these empirical approaches are incapable of extrapolation by their nature, limited by the experimental data from which they are derived.
-Recent work has instead turned to molecular Machine Learning (ML) which in theory could learn the underlying physics dictating the solubility and thus generalize.
+We will extend recent work on applying molecular Machine Learning (ML) to this problem, which in theory could learn the underlying physics dictating the solubility and thus generalize.
 
-Given the experimental challenges, datasets of organic solubility are highly dispersed in the literature.
-Previous efforts by Vermeire et al. [@vermeire_solublility] compiled one of the largest publicly available datasets of thermodynamic quantities of drug-like molecules as well as a testing set of non-aqueous solubility for the same.
+# Problem Formulation and Background
+This a supervised learning problem with many open questions related to molecular representation and overall model structure.
+For the former, previous literature has focused primarily on applying learned representations via message-passing graph neural networks.
+We will include this as a reference point but will instead primarily focus on the application of descriptor-based models via `fastprop` (GitHub.com/JacksonBurns/fastprop).
+This comparison between representation approaches should prove to be informative.
+
+For the latter point, prior literature has also usually tried to enforce physics constraints in the model architecture. 
+Vermeire et al. [@vermeire_solublility] compiled one of the largest publicly available datasets of thermodynamic quantities of drug-like molecules as well as a testing set of non-aqueous solubility for the same.
 Using the former they trained a combination of three Directed-Message Passing (Graph) Neural Networks (D-MPNN) models (via Chemprop [@chemprop_theory; @chemprop_software]) to predict different thermodynamic quantities, which in turn predicted solubility using a thermocycle.
-This coupling of an ML workflow to thermodynamics modeling achieved smooth gradients of solubility with respect to temperature.
-
-While the reference model achieves a low error across most of chemical space, we have observed extremely poor performance and non-physical predictions in the limit of high solubility (>1 mol/L).
-We believe this is due to the imbalanced nature of the training data, which has relatively few examples of highly soluble compounds.
-By simplifying the learning task and instead directly predicting solubility from the input structures, we believe model performance can be improved.
-
-We propose to train a Chemprop model which learns a representation for both the solute and solvent and then ingests the temperature by concatenating it to that representation.
-Additionally, we will compare an alternative model architecture `fastprop`(GitHub.com/JacksonBurns/fastprop), which has been shown to outperform Chemprop on other prediction tasks using only classical molecular descriptors for the solute and solvent.
-We will also quantify the performance of our models in the limit of high solubility to observe if direct prediction reduces the occurrence of non-physical predictions.
-This approach could provide improved solubility predictions with greater interpretability, which could be a helpful contribution to solubility prediction.
+Another work by Yashaswi and coauthors [@yashaswi_interaction] used an 'interaction block' - an intermediate layer in their network which performed a row-wise multiplication of the solute and solvent learned representations which was then passed to an FNN.
+This approach is analogous to training the model to map the structures to abraham-like solubility parameters, which are then weighted and combined for prediction.
+This question of appropriately enforcing physics is likely the most challenging aspect of this project (see [Challenges](#challenges)).
 
 # Data
-We will be using the solubility dataset published by Vermeire et al. [@vermeire_solublility].
+We will be using the aforementioned solubility dataset published by Vermeire et al. [@vermeire_solublility], which is made available via a machine-readable data format on Zenodo.
 This dataset contains 6261 solubility datapoints, with solute and solvent SMILES, solubility (logS), and temperature (K) as features.
+The original collators performed extensive data curation, so the reported solubility values are already well-sanitized and on a unified scale.
+We may apply standard scaling, log scaling, or power scaling to the values to simplify prediction though this will ultimately be decided based on the performance.
 
-# Supervisor 
-Given this is a molecular property prediction task on pharmaceutically-relevant small molecules, we would greatly appreciate Professor Coley's expertise on our project.
+# Challenges
+We anticipate that the small amount of data and its highly imbalanced nature will require us to build physics in to our models.
+The reference study which aggregated this data enforced physics by never directly training on the solubility and instead creating models to predict other molecular properties used to calculate it.
+Our naive initial fastprop model will simply ingest the solute, solvent, and temperature as inputs to an FNN, effectively assuming that their is some ethereal non-linear mapping which can be learned between these and the solubility with no physics knowledge. 
+The challenge is that their is likely some 'intermediate' between these two ideas which includes a sufficient amount of physics so as to assist the model in learning complex relationships but not so much that it becomes inflexible.
+By 'interacting' the solute and solvent representation (learned or descriptor-based) via element-wise multiplication, for example, we could force the model to learn a latent representation which is analogous to an abraham-like multiplicative solubility coefficient.
+Finding which 'interaction' between these representations is the most effective will require creativity and extensive experimentation.
 
 # Cited Works
