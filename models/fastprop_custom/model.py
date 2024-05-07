@@ -78,7 +78,7 @@ class fastpropSolubility(_fastprop):
                     f"Invalid choice of interaction ({interaction_operation}) for mis-matched solute/solvent"
                     f" embedding sizes {solute_hidden_size}/{solvent_hidden_size}."
                 )
-            num_interaction_features = hidden_size + 1  # plus temperature
+            num_interaction_features = solvent_hidden_size + 1  # plus temperature
             if interaction_operation == "multiplication":
                 interaction_modules.append(Multiplication())
             elif interaction_operation == "subtraction":

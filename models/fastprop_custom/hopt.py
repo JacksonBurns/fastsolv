@@ -4,24 +4,19 @@ from typing import Dict
 
 import numpy as np
 import pandas as pd
+import psutil
+import ray
 import torch
-from lightning.pytorch import seed_everything
-
-from fastprop.data import (
-    fastpropDataLoader,
-    split,
-    standard_scale,
-)
+from fastprop.data import fastpropDataLoader, split, standard_scale
 from fastprop.defaults import _init_loggers, init_logger
 from fastprop.model import fastprop, train_and_test
-
-import ray
+from lightning.pytorch import seed_everything
 from ray import tune
 from ray.train.torch import enable_reproducibility
 from ray.tune.search.optuna import OptunaSearch
 
-from model import fastpropSolubility
 from data import SolubilityDataset
+from model import fastpropSolubility
 
 logger = init_logger(__name__)
 
@@ -31,14 +26,16 @@ NUM_HOPT_TRIALS = 32
 def define_by_run_func(trial):
     trial.suggest_categorical("hidden_size", tuple(range(400, 1901, 500)))
     trial.suggest_categorical("interaction_layers", tuple(range(0, 3, 1)))
-    solvent_layers = trial.suggest_categorical("solvent_layers", tuple(range(1, 3, 1)))
-    solute_layers = trial.suggest_categorical("solute_layers", tuple(range(0, 1, 1)))
+    interaction = trial.suggest_categorical("interaction", ("concatenation", "multiplication", "subtraction"))
 
     # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation
-    if (solvent_layers == 0 and solute_layers > 0) or (solvent_layers > 0 and solute_layers == 0):
-        trial.suggest_categorical("interaction", ("concatenation",))
+    if interaction == "concatenation":
+        trial.suggest_int("solvent_layers", 0, 3, 1)
+        trial.suggest_int("solute_layers", 0, 3, 1)
     else:
-        trial.suggest_categorical("interaction", ("multiplication", "subtraction"))
+        # we miss 0 and 0 with mult/add, but we do not suspect that will perform well anyway
+        trial.suggest_int("solvent_layers", 1, 3, 1)
+        trial.suggest_int("solute_layers", 1, 3, 1)
 
 
 def main():
@@ -72,17 +69,18 @@ def main():
                 solute_features_ref,
                 solvent_features_ref,
             ),
-            # run 2 models at the same time (leave 20% for system)
-            # don't specify cpus, and just let pl figure it out
-            resources={"gpu": (1 - 0.20) / 2},
+            resources={"gpu": 1, "cpu": psutil.cpu_count()},
         ),
         tune_config=tune.TuneConfig(
             search_alg=algo,
             max_concurrent_trials=2,
             num_samples=NUM_HOPT_TRIALS,
+            metric=metric,
+            mode="min",
         ),
     )
     results = tuner.fit()
+    results.get_dataframe().to_csv("hopt_results.csv")
     best = results.get_best_result().config
     logger.info(f"Best hyperparameters identified: {', '.join([key + ': ' + str(val) for key, val in best.items()])}")
     return best
