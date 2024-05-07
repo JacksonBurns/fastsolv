@@ -24,24 +24,24 @@ NUM_HOPT_TRIALS = 32
 
 
 def define_by_run_func(trial):
-    trial.suggest_categorical("hidden_size", tuple(range(400, 1901, 500)))
-    trial.suggest_categorical("interaction_layers", tuple(range(0, 3, 1)))
+    trial.suggest_int("hidden_size", 400, 1900, 500)
+    trial.suggest_int("interaction_layers", 0, 2, 1)
     interaction = trial.suggest_categorical("interaction", ("concatenation", "multiplication", "subtraction"))
 
     # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation
+    solvent_layers = trial.suggest_int("solvent_layers", 0, 2, 1)
     if interaction == "concatenation":
-        trial.suggest_int("solvent_layers", 0, 3, 1)
-        trial.suggest_int("solute_layers", 0, 3, 1)
+        trial.suggest_int("solute_layers", 0, 2, 1)
     else:
-        # we miss 0 and 0 with mult/add, but we do not suspect that will perform well anyway
-        trial.suggest_int("solvent_layers", 1, 3, 1)
-        trial.suggest_int("solute_layers", 1, 3, 1)
+        if solvent_layers == 0:
+            trial.suggest_int("solute_layers", 0, 0)
+        else:
+            trial.suggest_int("solute_layers", 1, 2, 1)
 
 
 def main():
     # setup logging and output directories
     os.makedirs("output", exist_ok=True)
-    os.makedirs(os.path.join("output", "checkpoints"), exist_ok=True)
     _init_loggers("output")
     logging.getLogger("pytorch_lightning").setLevel(logging.INFO)
     seed_everything(42)
