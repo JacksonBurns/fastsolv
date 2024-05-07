@@ -25,7 +25,7 @@ from data import SolubilityDataset
 
 logger = init_logger(__name__)
 
-NUM_HOPT_TRIALS = 1
+NUM_HOPT_TRIALS = 32
 
 
 def define_by_run_func(trial):
