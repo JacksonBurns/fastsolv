@@ -34,6 +34,7 @@ class fastpropSolubility(_fastprop):
         num_features: int = 1613,
         num_interaction_layers: int = 0,
         learning_rate: float = 0.001,
+        hidden_size: int = 1600,
     ):
         super().__init__(
             input_size=num_features,
@@ -51,14 +52,16 @@ class fastpropSolubility(_fastprop):
         # solute
         solute_modules = []
         for i in range(num_solute_representation_layers):  # hidden layers
-            solute_modules.append(torch.nn.Linear(num_features, num_features))
+            solute_modules.append(torch.nn.Linear(num_features if i == 0 else hidden_size, hidden_size))
             solute_modules.append(torch.nn.ReLU())
+        solute_hidden_size = num_features if num_solute_representation_layers == 0 else hidden_size
 
         # solvent
         solvent_modules = []
         for i in range(num_solvent_representation_layers):  # hidden layers
-            solvent_modules.append(torch.nn.Linear(num_features, num_features))
+            solvent_modules.append(torch.nn.Linear(num_features if i == 0 else hidden_size, hidden_size))
             solvent_modules.append(torch.nn.ReLU())
+        solvent_hidden_size = num_features if num_solvent_representation_layers == 0 else hidden_size
 
         # assemble modules (if empty, just passes input through)
         self.solute_representation_module = torch.nn.Sequential(*solute_modules)
@@ -66,11 +69,16 @@ class fastpropSolubility(_fastprop):
 
         # interaction module
         interaction_modules = []
-        if interaction_operation == "concatenation":  # size doubles if concatenated
-            num_interaction_features = 2 * num_features + 1  # plus temperature
+        if interaction_operation == "concatenation":  # size increases if concatenated
+            num_interaction_features = solvent_hidden_size + solute_hidden_size + 1  # plus temperature
             interaction_modules.append(Concatenation())
         else:
-            num_interaction_features = num_features + 1  # plus temperature
+            if solute_hidden_size != solvent_hidden_size:
+                raise TypeError(
+                    f"Invalid choice of interaction ({interaction_operation}) for mis-matched solute/solvent"
+                    f" embedding sizes {solute_hidden_size}/{solvent_hidden_size}."
+                )
+            num_interaction_features = hidden_size + 1  # plus temperature
             if interaction_operation == "multiplication":
                 interaction_modules.append(Multiplication())
             elif interaction_operation == "subtraction":
@@ -102,6 +110,6 @@ if __name__ == "__main__":
     temperature = torch.rand((4, 1))
     batch = (solute, solvent, temperature)
 
-    model = fastpropSolubility(2, 1, "multiplication", 1_613, 2, 1e-3)
+    model = fastpropSolubility(2, 1, "multiplication", 1_613, 2, 1e-3, 1_600)
     print(model)
     print(model(batch))
