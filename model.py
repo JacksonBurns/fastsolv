@@ -32,16 +32,14 @@ class fastpropSolubility(fastprop):
 
         # solute 
         self.solute_module = []
-        self.solute_module.append(torch.nn.Linear(num_features, num_features))
-        self.solute_module.append(torch.nn.ReLU()) #input layer
+        self.solute_module.append(torch.nn.Identity())
         for i in range(num_solute_representation_layers): #hidden layers
           self.solute_module.append(torch.nn.Linear(num_features, num_features))
           self.solute_module.append(torch.nn.ReLU())
 
         #solvent
         self.solvent_module = []
-        self.solvent_module.append(torch.nn.Linear(num_features, num_features))
-        self.solvent_module.append(torch.nn.ReLU()) #input layer 
+        self.solvent_module.append(torch.nn.Identity())
         for i in range(num_solvent_representation_layers): #hidden layers
           self.solvent_module.append(torch.nn.Linear(num_features, num_features))
           self.solvent_module.append(torch.nn.ReLU())
