@@ -2,7 +2,6 @@ from typing import List, Literal, Optional, OrderedDict, Tuple
 import pytorch as torch
 import fastprop 
 
-
 class fastpropSolubility(fastprop):
     def __init__(
         self,
@@ -51,11 +50,11 @@ class fastpropSolubility(fastprop):
         #concatenated module
         self.concatenated_module = []
         if self.concatenation_operation == "concatenation": #size doubles if concatenated
-          self.concat_features = 2*num_features
+          self.concat_features = 2*num_features + 1 #plus temperature
           self.concatenated_module.append(torch.nn.Linear(self.concat_features, self.concat_features))
           self.concatenated_module.append(torch.nn.ReLU())
         else:
-          self.concat_features = num_features
+          self.concat_features = num_features + 1 #plus temperature
           self.concatenated_module.append(torch.nn.Linear(self.concat_features, self.concat_features))
           self.concatenated_module.append(torch.nn.ReLU()) #input layer
         for i in range(num_concatenation_layers): #hidden layers
@@ -70,15 +69,18 @@ class fastpropSolubility(fastprop):
     def forward(self, x):
         solute = x.solute
         solvent = x.solvent
+        temp = x.temperature
         solute_representation = self.solute_representation_module(solute)
         solvent_representation = self.solvent_representation_module(solvent)
 
         if self.concatenation_operation == "concatenation":
-            concatenated_representation = torch.cat((solute_representation, solvent_representation), dim=1)
+            concatenated_representation = torch.cat((solute_representation, solvent_representation, temp), dim=1)
         elif self.concatenation_operation == "multiplication":
             concatenated_representation = solute_representation * solvent_representation
+            concatenated_representation = torch.cat((concatenated_representation, temp), dim=1)
         elif self.concatenation_operation == "subtraction":
             concatenated_representation = solute_representation - solvent_representation
+            concatenated_representation = torch.cat((concatenated_representation, temp), dim=1)
         output = self.concated_representation_module(concatenated_representation)
         y = self.readout(output)
         return y
