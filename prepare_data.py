@@ -26,7 +26,7 @@ room_T_data: pd.DataFrame = pd.read_csv(os.path.join(_src_dir, "CombiSolu-Exp-Hi
 high_T_data: pd.DataFrame = pd.read_csv(os.path.join(_src_dir, "CombiSolu-Exp.csv"))
 all_data: pd.DataFrame = pd.concat((room_T_data, high_T_data))
 # drop those missing the solubility
-all_data: pd.DataFrame = all_data[all_data["experimental_logS [mol/L]"].notna()]
+all_data: pd.DataFrame = all_data[all_data["experimental_logS [mol/L]"].notna()].reset_index()
 
 # find all the unique molecules in the dataset and calculate their descriptors
 unique_smiles: np.ndarray = np.hstack((pd.unique(all_data["solvent_smiles"]), pd.unique(all_data["solute_smiles"])))

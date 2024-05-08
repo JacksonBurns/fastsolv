@@ -2,12 +2,12 @@ import logging
 import os
 from typing import Dict
 
-import numpy as np
 import pandas as pd
 import psutil
 import ray
 import torch
-from fastprop.data import fastpropDataLoader, split, standard_scale
+from astartes import train_val_test_split
+from fastprop.data import fastpropDataLoader, standard_scale
 from fastprop.defaults import _init_loggers, init_logger
 from fastprop.model import fastprop, train_and_test
 from lightning.pytorch import seed_everything
@@ -48,6 +48,7 @@ def main():
 
     # load the data
     df = pd.read_csv("prepared_data.csv", index_col=0)
+    solute_df = df[["solute_smiles"]]
     solubilities = torch.tensor(df.iloc[:, 2].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
     temperatures = torch.tensor(df.iloc[:, 3].to_numpy(), dtype=torch.float32).unsqueeze(-1)
     solute_features = torch.tensor(df.iloc[:, 4 : (4 + 1_613)].to_numpy(), dtype=torch.float32)
@@ -60,6 +61,7 @@ def main():
     temperatures_ref = ray.put(temperatures)
     solute_features_ref = ray.put(solute_features)
     solvent_features_ref = ray.put(solvent_features)
+    solute_df_ref = ray.put(solute_df)
     tuner = tune.Tuner(
         tune.with_resources(
             lambda trial: _hopt_objective(
@@ -68,6 +70,7 @@ def main():
                 temperatures_ref,
                 solute_features_ref,
                 solvent_features_ref,
+                solute_df_ref,
             ),
             resources={"gpu": 1, "cpu": psutil.cpu_count()},
         ),
@@ -92,19 +95,26 @@ def _hopt_objective(
     temperatures_ref,
     solute_features_ref,
     solvent_features_ref,
+    solute_df_ref,
 ) -> Dict[str, float]:
     solubilities = ray.get(solubilites_ref)
     temperatures = ray.get(temperatures_ref)
     solute_features = ray.get(solute_features_ref)
     solvent_features = ray.get(solvent_features_ref)
+    solute_df = ray.get(solute_df_ref)
     random_seed = 42
     enable_reproducibility(random_seed)
     all_test_results, all_validation_results = [], []
     for replicate_number in range(3):
         logger.info(f"Training model {replicate_number+1} of 3 ({random_seed=})")
 
+        # split the data s.t. some solutes are not seen during training
+        solutes_train, solutes_val, solutes_test = train_val_test_split(pd.unique(solute_df["solute_smiles"]))
+        train_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_train)].tolist()
+        val_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_val)].tolist()
+        test_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_test)].tolist()
+
         # rescale ALL the things
-        train_indexes, val_indexes, test_indexes = split(np.arange(len(solubilities)))
         solute_features[train_indexes], solute_feature_means, solute_feature_vars = standard_scale(solute_features[train_indexes])
         solute_features[val_indexes] = standard_scale(solute_features[val_indexes], solute_feature_means, solute_feature_vars)
         solute_features[test_indexes] = standard_scale(solute_features[test_indexes], solute_feature_means, solute_feature_vars)
@@ -178,7 +188,7 @@ def _hopt_objective(
     logger.info("Displaying validation results:\n%s", validation_results_df.describe().transpose().to_string())
     test_results_df = pd.DataFrame.from_records(all_test_results)
     logger.info("Displaying testing results:\n%s", test_results_df.describe().transpose().to_string())
-    return {"mse": test_results_df.describe().at["mean", "test_mse_scaled_loss"]}
+    return {"mse": validation_results_df.describe().at["mean", "validation_mse_scaled_loss"]}
 
 
 if __name__ == "__main__":
