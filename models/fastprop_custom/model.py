@@ -35,6 +35,8 @@ class fastpropSolubility(_fastprop):
         num_interaction_layers: int = 0,
         learning_rate: float = 0.001,
         hidden_size: int = 1600,
+        target_means: torch.Tensor = None,
+        target_vars: torch.Tensor = None,
     ):
         super().__init__(
             input_size=num_features,
@@ -45,6 +47,8 @@ class fastpropSolubility(_fastprop):
             learning_rate=learning_rate,
             problem_type="regression",
             target_names=[],
+            target_means=target_means,
+            target_vars=target_vars,
         )
         del self.fnn
         del self.readout
