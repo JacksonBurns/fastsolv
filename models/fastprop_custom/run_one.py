@@ -1,10 +1,10 @@
 import logging
 import os
 
-import numpy as np
 import pandas as pd
 import torch
-from fastprop.data import fastpropDataLoader, split, standard_scale
+from astartes import train_val_test_split
+from fastprop.data import fastpropDataLoader, standard_scale
 from fastprop.defaults import _init_loggers, init_logger
 from fastprop.model import train_and_test
 from lightning.pytorch import seed_everything
@@ -24,6 +24,7 @@ def main():
 
     # load the data
     df = pd.read_csv("prepared_data.csv", index_col=0)
+    solute_df = df[["solute_smiles"]]
     solubilities = torch.tensor(df.iloc[:, 2].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
     temperatures = torch.tensor(df.iloc[:, 3].to_numpy(), dtype=torch.float32).unsqueeze(-1)
     solute_features = torch.tensor(df.iloc[:, 4 : (4 + 1_613)].to_numpy(), dtype=torch.float32)
@@ -35,8 +36,11 @@ def main():
     for replicate_number in range(3):
         logger.info(f"Training model {replicate_number+1} of 3 ({random_seed=})")
 
-        # rescale ALL the things
-        train_indexes, val_indexes, test_indexes = split(np.arange(len(solubilities)))
+        # split the data s.t. some solutes are not seen during training
+        solutes_train, solutes_val, solutes_test = train_val_test_split(pd.unique(solute_df["solute_smiles"]), random_state=random_seed)
+        train_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_train)].tolist()
+        val_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_val)].tolist()
+        test_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_test)].tolist()
         solute_features[train_indexes], solute_feature_means, solute_feature_vars = standard_scale(solute_features[train_indexes])
         solute_features[val_indexes] = standard_scale(solute_features[val_indexes], solute_feature_means, solute_feature_vars)
         solute_features[test_indexes] = standard_scale(solute_features[test_indexes], solute_feature_means, solute_feature_vars)
@@ -80,14 +84,27 @@ def main():
         )
 
         # initialize the model and train/test
+        # plain fastprop model
+        # model = fastpropSolubility(
+        #     0,
+        #     0,
+        #     "concatenation",
+        #     1_613,
+        #     2,
+        #     0.001,
+        #     3000,
+        #     solubility_means,
+        #     solubility_vars,
+        # )
+        # new bespoke model
         model = fastpropSolubility(
-            2,
-            2,
+            0,
+            0,
             "concatenation",
             1_613,
             2,
             0.001,
-            1_400,
+            3000,
             solubility_means,
             solubility_vars,
         )

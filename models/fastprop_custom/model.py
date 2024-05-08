@@ -90,12 +90,12 @@ class fastpropSolubility(_fastprop):
             else:
                 raise TypeError(f"Unknown interaction operation '{interaction_operation}'!")
         for i in range(num_interaction_layers):  # hidden layers
-            interaction_modules.append(torch.nn.Linear(num_interaction_features, num_interaction_features))
+            interaction_modules.append(torch.nn.Linear(num_interaction_features if i == 0 else hidden_size + 1, hidden_size + 1))
             interaction_modules.append(torch.nn.ReLU())
         self.interaction_module = torch.nn.Sequential(*interaction_modules)
 
         # readout
-        self.readout = torch.nn.Linear(num_interaction_features, 1)
+        self.readout = torch.nn.Linear(num_interaction_features if num_interaction_layers == 0 else hidden_size + 1, 1)
         self.save_hyperparameters()
 
     def forward(self, batch):

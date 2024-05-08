@@ -109,7 +109,7 @@ def _hopt_objective(
         logger.info(f"Training model {replicate_number+1} of 3 ({random_seed=})")
 
         # split the data s.t. some solutes are not seen during training
-        solutes_train, solutes_val, solutes_test = train_val_test_split(pd.unique(solute_df["solute_smiles"]))
+        solutes_train, solutes_val, solutes_test = train_val_test_split(pd.unique(solute_df["solute_smiles"]), random_state=random_seed)
         train_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_train)].tolist()
         val_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_val)].tolist()
         test_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_test)].tolist()
