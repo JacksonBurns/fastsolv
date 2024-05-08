@@ -1,10 +1,9 @@
 ---
-title: "Generalizable, Fast, and Accurate Deep-QSPR with `fastprop`"
-subtitle: "Part 1: Framework and Benchmarks"
+title: "Predicting Non-Aqueous Solubility with Molecular Descriptors and Message Passing Neural Networks"
 author: 
-  - name: Jackson W. Burns \orcidlink{0000-0002-0657-9426}
-    affil-id: 1,**
   - name: Lucas Attia \orcidlink{0000-0002-9941-3846}
+    affil-id: 1,**
+  - name: Jackson W. Burns \orcidlink{0000-0002-0657-9426}
     affil-id: 1,**
   - name: Patrick S. Doyle \orcidlink{0000-0003-2147-9172}
     affil-id: 1
@@ -41,7 +40,14 @@ note: |
  This paper has been copied from github.com/JacksonBurns/fastprop (and modified).
 ---
 
-# Summary
+# Introduction
+The solubilities of drug-like molecules in non-aqueous organic solvents are crucial properties for drug substance and drug product manufacturing.
+Experimentally measuring non-aqueous solid solubility requires notoriously tedious experiments which are both time-consuming and resource-intensive.
+Thus, predicting organic solubility of drug-like molecules _a-priori_ based on their structure alone has been an active and robust area of academic and industrial research.
+The traditional approach relies on empirical solubility models like the Abraham Solvation model to estimate solubility.
+However, these empirical approaches are incapable of extrapolation by their nature, limited by the experimental data from which they are derived.
+We will extend recent work on applying molecular Machine Learning (ML) to this problem, which in theory could learn the underlying physics dictating the solubility and thus generalize.
+
  1. Experimentalists find it useful to know the solubility of a solid in a solvent _a-priori_ to aid with synthesis.
  2. Prior experimental data with known solubilities is both highly dispersed in the literature and incomplete.
  3. This forces experimentalists to rely on models like the Abraham Solvation model to get an estimate of the solubility (which is also limited by the experimental data from which the model was derived) or as a lost resort simple empirical work which is time consuming.
@@ -51,8 +57,51 @@ note: |
  7. Even more noteworthy is that an alternative model architecture `fastprop` (GitHub.com/JacksonBurns/fastprop) is able to outperform both of these models using only classical molecular descriptors for the solute and solvent, again with the temperature concatenated to the FNN input: RMSE 0.231+/-0.061 MAE 0.133+/-0.025.
  8. Separately from the pure improvement of the model is the interest in the 'high solubility' domain. It is often most interesting to identify which solvents are the _best_ at dissolving a given solid, so it is critical for the models to be especially accurate in this region of the data (are they?).
 
-# Results and Discussion
+## Related Work
+This a supervised learning problem with many open questions related to molecular representation and overall model structure.
+For the former, previous literature has focused primarily on applying learned representations via message-passing graph neural networks.
+We will include this as a reference point but will instead primarily focus on the application of descriptor-based models via `fastprop` (GitHub.com/JacksonBurns/fastprop).
+This comparison between representation approaches should prove to be informative.
 
+For the latter point, prior literature has also usually tried to enforce physics constraints in the model architecture. 
+Vermeire et al. [@vermeire_solublility] compiled one of the largest publicly available datasets of thermodynamic quantities of drug-like molecules as well as a testing set of non-aqueous solubility for the same.
+Using the former they trained a combination of three Directed-Message Passing (Graph) Neural Networks (D-MPNN) models (via Chemprop [@chemprop_theory; @chemprop_software]) to predict different thermodynamic quantities, which in turn predicted solubility using a thermocycle.
+Another work by Yashaswi and coauthors [@yashaswi_interaction] used an 'interaction block' - an intermediate layer in their network which performed a row-wise multiplication of the solute and solvent learned representations which was then passed to an FNN.
+This approach is analogous to training the model to map the structures to abraham-like solubility parameters, which are then weighted and combined for prediction. In this project we will implement and compare various ways to interact the solvent and solute representations, including but not limited to simple concatenation, row-wise multiplication, dot product. The various ways to enforce interaction between the learned representations reflect different underlying functional forms of solvation physics, and to our knowledge, this would be the first work directly comparing different interaction architectures for the task of molecular organic solubility prediction. This question of appropriately enforcing physics in our model is likely the most interesting and challenging aspect of this project (see [Challenges](#challenges)).
+
+## Data
+We will be using the aforementioned solubility dataset published by Vermeire et al. [@vermeire_solublility], which is made available via a machine-readable data format on Zenodo.
+This dataset contains 6261 solubility datapoints, with solute and solvent SMILES, solubility (logS), and temperature (K) as features.
+The original collators performed extensive data curation, so the reported solubility values are already well-sanitized and on a unified scale.
+We may apply standard scaling, log scaling, or power scaling to the values to simplify prediction though this will ultimately be decided based on the performance.
+
+The dataset is here: https://zenodo.org/records/5970538
+The solubility data is separated into two CSV files: `CombiSolu-Exp.csv` and `CombiSolu-Exp-HighT.csv` located in `SolProp_v1.2/Data`.
+The former contains the embeddings for the two molecules, the temperature at which the solubility measurement was made, as well as the actual solubility measurement in mol fraction (converted from various literature reporting formats).
+The latter contains the same data as the former, but at higher temperatures.
+
+**Solubility is log-transformed (base 10)**
+
+# Methods
+We anticipate that the small amount of data and its highly imbalanced nature will require us to build physics in to our models.
+The reference study which aggregated this data enforced physics by never directly training on the solubility and instead creating models to predict other molecular properties used to calculate it.
+Our naive initial fastprop model will simply ingest the solute, solvent, and temperature as inputs to an FNN, effectively assuming that their is some ethereal non-linear mapping which can be learned between these and the solubility with no physics knowledge. The challenge is that their is likely some 'intermediate' between these two ideas which includes a sufficient amount of physics so as to assist the model in learning complex relationships but not so much that it becomes inflexible. By 'interacting' the solute and solvent representation (learned or descriptor-based) via element-wise multiplication, for example, we could force the model to learn a latent representation which is analogous to an abraham-like multiplicative solubility coefficient. Finding which 'interaction' between these representations is the most effective will require creativity and extensive experimentation.
+
+There are a ton of methods to predict solubility of organics in water (and probably common solvents, like octanol: https://www.sciencedirect.com/science/article/abs/pii/S002235491531025X) -> there are fewer methods to predict in arbitrary solvent -> even fewer to predict in arbitrary solvent at arbitrary temperature
+Group contribution methods are abundant for the first one
+second one: Common approach is fitting to experimental data, like the Abraham Solvation model or this paper: https://www.sciencedirect.com/science/article/abs/pii/S0022354915327301 which builds on that model
+third one seems to be basically only done with ML, see this predecessor to Vermeire's work: https://link.springer.com/article/10.1186/s13321-021-00575-3 though I did find one interesting paper that does it with UniFac (!!) https://pubs.acs.org/doi/full/10.1021/ie011014w
+I have thought more about interaction blocks and have grown very skeptical. Here's my thought process:
+we have two representations for two molecules (learned or descriptors) that we know are physically interacting with eachother.
+We want the FNN to learn this interaction, and specifically how it correlates to the solubility.
+The interaction between the features could be any linear or nonlinear function.
+Key: there is no mathematical interaction we can enforce that the network would be unable to learn on its own since NNs are universal function approximators
+example: if the 'correct' (heavy quotes) interaction between the solute and the solvent was multiplication of each feature by the corresponding one in the other molecule, the NN could readily learn this. There is no point in doing this manually, except to perhaps make the task easier for the network. Critically, existing methods actually make the task harder by keeping the un-interacted representations, making the total parameter space larger.
+Using an 'interaction block' only increases the parameter space unless you actually replace the features with the interaction, which we know we shouldn't do because no mathematical operation we can do would include non-linear interactions.
+I propose that we try some interaction blocks, if only to prove that they just make the task harder, and the network just ends up learning based on the un-interacted input.
+We can do this by looking at the feature importance's of the inputs of the FNN or by just comparing the performance values.
+
+# Results
 Out of the box `fastprop` results:
 ```
 [03/12/2024 12:56:40 PM fastprop.fastprop_core] INFO: Displaying validation results:
@@ -132,7 +181,15 @@ Overall test r2 = 0.908125 +/- 0.000000
 Elapsed time = 0:10:37
 ```
 
-# High Solubility Region
+<!-- Consider adding this section about highly soluble molecules back to the paper for submission to a journal - it could prove interesting as a comment on 'hit detection', an interesting application of these models.
+
+## Highly Soluble Species
+Story:
+ - Vermeire devised a method to predict solubility of arbitrary combinations of molecules at any temperature.
+ - Attia was using this for an actual system in research, it was supposed to be highly soluble, the model predicted a non-physical high value.
+ - On further investigation, _approximately_ 90% of the data falls in the range of insoluble to 1/3 of the max, 10% in the range of 1/3rd most to 2/3rd most, and only 1% of the dataset is in the range of very high solubility the remaining 1/3rd of the solublity range
+ - Ideas: apply power scaling to smooth this range, then train another chemprop model to see if it works; train a fastprop model on the whole data and this range for comparison.
+ - Limitation - not interested in any other than STP, so retraining the model in the future will be required for fair comparison (unless we want to add temperature to fastprop, which is possible) after we use the published model just to check the accuracy on this limited range 
 
 If we drop all datapoints where the solubility is less than 1 mol/L, performance changes dramatically.
 
@@ -179,7 +236,20 @@ Overall test mae = 0.202236 +/- 0.000000
 Overall test r2 = 0.329536 +/- 0.000000
 Elapsed time = 0:00:49
 ```
+-->
 
+# Conclusion
+
+
+<!-- These two sections can be removed after submitting the class report - they are likely not needed for a journal submission. -->
+# Contributions
+
+# Code
+Code is available via GitHub
+
+# Results and Discussion
+
+<!-- These sections should be added back for the eventual paper submission.
 # Declarations
 
 ## Availability of data and materials
@@ -200,6 +270,6 @@ Neither the United States Government nor any agency thereof, nor any of their em
 Reference herein to any specific commercial product, process, or service by trade name, trademark, manufacturer, or otherwise does not necessarily constitute or imply its
 endorsement, recommendation, or favoring by the United States Government or any agency
 thereof.
-The views and opinions of authors expressed herein do not necessarily state or reflect those of the United States Government or any agency thereof.
+The views and opinions of authors expressed herein do not necessarily state or reflect those of the United States Government or any agency thereof. -->
 
 # Cited Works
