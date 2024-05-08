@@ -9,6 +9,9 @@ from typing import Literal
 import torch
 from fastprop.model import fastprop as _fastprop
 
+ENABLE_SNN = False
+ENABLE_DROPOUT = False
+
 
 class Concatenation(torch.nn.Module):
     def forward(self, batch):
@@ -57,14 +60,28 @@ class fastpropSolubility(_fastprop):
         solute_modules = []
         for i in range(num_solute_representation_layers):  # hidden layers
             solute_modules.append(torch.nn.Linear(num_features if i == 0 else hidden_size, hidden_size))
-            solute_modules.append(torch.nn.ReLU())
+            if ENABLE_SNN:
+                solute_modules.append(torch.nn.SELU())
+                if ENABLE_DROPOUT:
+                    solute_modules.append(torch.nn.AlphaDropout())
+            else:
+                solute_modules.append(torch.nn.ReLU())
+                if ENABLE_DROPOUT:
+                    solute_modules.append(torch.nn.Dropout())
         solute_hidden_size = num_features if num_solute_representation_layers == 0 else hidden_size
 
         # solvent
         solvent_modules = []
         for i in range(num_solvent_representation_layers):  # hidden layers
             solvent_modules.append(torch.nn.Linear(num_features if i == 0 else hidden_size, hidden_size))
-            solvent_modules.append(torch.nn.ReLU())
+            if ENABLE_SNN:
+                solute_modules.append(torch.nn.SELU())
+                if ENABLE_DROPOUT:
+                    solute_modules.append(torch.nn.AlphaDropout())
+            else:
+                solute_modules.append(torch.nn.ReLU())
+                if ENABLE_DROPOUT:
+                    solute_modules.append(torch.nn.Dropout())
         solvent_hidden_size = num_features if num_solvent_representation_layers == 0 else hidden_size
 
         # assemble modules (if empty, just passes input through)
@@ -91,7 +108,14 @@ class fastpropSolubility(_fastprop):
                 raise TypeError(f"Unknown interaction operation '{interaction_operation}'!")
         for i in range(num_interaction_layers):  # hidden layers
             interaction_modules.append(torch.nn.Linear(num_interaction_features if i == 0 else hidden_size + 1, hidden_size + 1))
-            interaction_modules.append(torch.nn.ReLU())
+            if ENABLE_SNN:
+                solute_modules.append(torch.nn.SELU())
+                if ENABLE_DROPOUT:
+                    solute_modules.append(torch.nn.AlphaDropout())
+            else:
+                solute_modules.append(torch.nn.ReLU())
+                if ENABLE_DROPOUT:
+                    solute_modules.append(torch.nn.Dropout())
         self.interaction_module = torch.nn.Sequential(*interaction_modules)
 
         # readout

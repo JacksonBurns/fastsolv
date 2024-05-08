@@ -21,22 +21,26 @@ from model import fastpropSolubility
 logger = init_logger(__name__)
 
 NUM_HOPT_TRIALS = 32
+ENABLE_BRANCHES = False
 
 
 def define_by_run_func(trial):
     trial.suggest_int("hidden_size", 200, 3000, 200)
-    trial.suggest_int("interaction_layers", 0, 3, 1)
+    trial.suggest_int("interaction_layers", 0, 4, 1)
     interaction = trial.suggest_categorical("interaction", ("concatenation", "multiplication", "subtraction"))
 
-    # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation
-    solvent_layers = trial.suggest_int("solvent_layers", 0, 3, 1)
-    if interaction == "concatenation":
-        trial.suggest_int("solute_layers", 0, 3, 1)
-    else:
-        if solvent_layers == 0:
-            trial.suggest_int("solute_layers", 0, 0)
+    if ENABLE_BRANCHES:
+        # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation
+        solvent_layers = trial.suggest_int("solvent_layers", 0, 4, 1)
+        if interaction == "concatenation":
+            trial.suggest_int("solute_layers", 0, 4, 1)
         else:
-            trial.suggest_int("solute_layers", 1, 3, 1)
+            if solvent_layers == 0:
+                trial.suggest_int("solute_layers", 0, 0)
+            else:
+                trial.suggest_int("solute_layers", 1, 4, 1)
+    else:
+        return {"solute_layers": 0, "solvent_layers": 0}
 
 
 def main():

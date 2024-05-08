@@ -84,19 +84,6 @@ def main():
         )
 
         # initialize the model and train/test
-        # plain fastprop model
-        # model = fastpropSolubility(
-        #     0,
-        #     0,
-        #     "concatenation",
-        #     1_613,
-        #     2,
-        #     0.001,
-        #     3000,
-        #     solubility_means,
-        #     solubility_vars,
-        # )
-        # new bespoke model
         model = fastpropSolubility(
             0,
             0,
