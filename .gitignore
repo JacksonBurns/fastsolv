@@ -2,3 +2,5 @@ SolProp_v1.2*
 *.csv
 *highsol_training
 paper/paper.pdf
+*.pyc
+models/fastprop_custom/output
