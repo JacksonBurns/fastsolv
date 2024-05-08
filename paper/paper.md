@@ -41,12 +41,12 @@ note: |
 ---
 
 # Introduction
-The solubilities of drug-like molecules in non-aqueous organic solvents are crucial properties for drug substance and drug product manufacturing.
-Experimentally measuring non-aqueous solid solubility requires notoriously tedious experiments which are both time-consuming and resource-intensive.
-Thus, predicting organic solubility of drug-like molecules _a-priori_ based on their structure alone has been an active and robust area of academic and industrial research.
-The traditional approach relies on empirical solubility models like the Abraham Solvation model to estimate solubility.
-However, these empirical approaches are incapable of extrapolation by their nature, limited by the experimental data from which they are derived.
-We will extend recent work on applying molecular Machine Learning (ML) to this problem, which in theory could learn the underlying physics dictating the solubility and thus generalize.
+The solubilities of drug-like molecules in non-aqueous organic solvents are crucial properties for drug substance and drug product manufacturing.[@hewitt2009silico]
+Experimentally measuring non-aqueous solid solubility requires notoriously tedious experiments which are both time-consuming and resource-intensive.[@alsenz2007high]
+Thus, predicting organic solubility of drug-like molecules _a-priori_ based on their structure alone has been an active and robust area of academic and industrial research.[@jorgensen2002prediction]
+The traditional approach for prediction relies on empirical solubility models like the Abraham Solvation model to estimate solubility.[@taft1985linear]
+However, these empirical approaches are incapable of extrapolation by their nature, limited by the experimental data from which they are derived. Recent work has instead explored applying molecular Machine Learning (ML) to this problem, which in theory could learn the underlying physics dictating the solubility and thus generalize.[@lusci2013deep,@panapitiya2022evaluation]
+We will extend recent work on applying 
 
  1. Experimentalists find it useful to know the solubility of a solid in a solvent _a-priori_ to aid with synthesis.
  2. Prior experimental data with known solubilities is both highly dispersed in the literature and incomplete.
@@ -100,6 +100,8 @@ example: if the 'correct' (heavy quotes) interaction between the solute and the 
 Using an 'interaction block' only increases the parameter space unless you actually replace the features with the interaction, which we know we shouldn't do because no mathematical operation we can do would include non-linear interactions.
 I propose that we try some interaction blocks, if only to prove that they just make the task harder, and the network just ends up learning based on the un-interacted input.
 We can do this by looking at the feature importance's of the inputs of the FNN or by just comparing the performance values.
+
+![`fastprop` logo.\label{logo}](../fastprop_logo.png){ width=2in }
 
 # Results
 Out of the box `fastprop` results:
