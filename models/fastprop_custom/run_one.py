@@ -163,10 +163,12 @@ def main():
 
         # initialize the model and train/test
         model = fastpropSolubility(
-            num_solute_representation_layers=2,
-            num_solvent_representation_layers=1,
-            branch_hidden_size=2_000,
+            num_solute_representation_layers=3,
+            num_solvent_representation_layers=3,
+            branch_hidden_size=1_000,
             interaction_operation="multiplication",
+            num_interaction_layers=1,
+            interaction_hidden_size=400,
             target_means=solubility_means,
             target_vars=solubility_vars,
         )
