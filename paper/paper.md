@@ -80,7 +80,7 @@ There are 99 unique solvents in the dataset, which is quite data-rich relative t
 There are 165 unique solutes in the dataset with the median number of measurements being 14.
 Figure \ref{label_distribution} below shows the distribution of logS across the dataset which ranges from -8.8 to 2.0.
 
-![Distribution of logS Values in Vermiere et al. [@vermeire_solublility]\label{label_distribution}](../label_distribution.png){ width=2in }
+![Distribution of logS Values in Vermiere et al. [@vermeire_solublility]\label{label_distribution}](../figures/label_distribution.png){ width=3in }
 
 The distribution is left-skewed with a unimodal peak near -1.
 Although 6236 datapoints is a relatively small dataset in the context of machine learning, this dataset is among the largest open-access experimental solubility datasets in literature.
@@ -104,7 +104,7 @@ The typical `fastprop` architecture maps a single molecule's molecular descripto
 The most obvious approach to amend this to properties based on pairs of molecules would be to simply concatenate the two molecules' descriptor sets and pass the resulting vector to a larger MLP, also concatenating the temperature as an additional input.
 This 'architecture' is shown in Figure \label{unbranched_model}.
 
-![Unbranched Baseline Model.\label{unbranched_model}](../unbranched_model.png){ width=2in }
+![Unbranched Baseline Model.\label{unbranched_model}](../figures/unbranched_model.png){ width=4in }
 
 Molecule are represented using all of the Mordred descriptors, 1,613 each for the solvent and solute.
 Later hyperparameter optimization with Optuna [@akiba2019optuna] will select the hidden layers sizes $\in {200, 5000}$ and depth $\in {0, 2}$ and the choice of activation function.
@@ -112,7 +112,7 @@ Later hyperparameter optimization with Optuna [@akiba2019optuna] will select the
 This baseline model is some arbitrary non-linear mapping between structures and solubility - essentially making _no_ assertions about the underlying physics.
 To incorporate physics we perform a second hyperparameter optimization on the architecture shown in Figure \ref{branched_model}.
 
-![Branched Physics-infused Model.\label{branched_model}](../branched_model.png){ width=2in }
+![Branched Physics-infused Model.\label{branched_model}](../figures/branched_model.png){ width=4in }
 
 The two separate MLPs for the solute and solvent descriptors allow for the network to learn unique latent embeddings for the two molecules, whereas in the baseline model they would necessarily be combined.
 This is done based on our physics understanding that a given solute or solvent has similar behavior across many combinations and thus one generally applicable embedding rather than infinitely many pair-specific embeddings.
