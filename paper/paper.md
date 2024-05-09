@@ -171,11 +171,20 @@ Hidden layer dimension & 3000 \\ \hline
 \end{tabular}
 \end{table}
 
+**Implications of the optimized architecture.
+We next evaluated the optimized fastsolv model on the Vermeire and Boobier datasets. The results are summarized in the table below. 
 
-
-Implications of the optimized architecture
-
-Then, we evaluated this model on the Boobier benezene, acetone, and ethanol datasets. *describe model performance and compare directly to the metrics in their paper* 
+\begin{table}[]
+\begin{tabular}{|c|cc|ccc|}
+\hline
+                  & \multicolumn{2}{c|}{Vermeire}          & \multicolumn{3}{c|}{Boobier}                                          \\ \hline
+Metric            & \multicolumn{1}{c|}{Validation} & Test & \multicolumn{1}{c|}{Acetone} & \multicolumn{1}{c|}{Benzene} & Ethanol \\ \hline
+MAE               & \multicolumn{1}{c|}{0.56}       & 0.60 & \multicolumn{1}{c|}{0.68}    & \multicolumn{1}{c|}{0.77}    & 0.69    \\ \hline
+RMSE              & \multicolumn{1}{c|}{0.68}       & 0.70 & \multicolumn{1}{c|}{0.83}    & \multicolumn{1}{c|}{0.92}    & 0.83    \\ \hline
+\% logS $\pm$ 0.7 & \multicolumn{1}{c|}{0.68}       & 0.65 & \multicolumn{1}{c|}{0.60}    & \multicolumn{1}{c|}{0.50}    & 0.55    \\ \hline
+\% logS $\pm$ 1.0 & \multicolumn{1}{c|}{0.84}       & 0.84 & \multicolumn{1}{c|}{0.78}    & \multicolumn{1}{c|}{0.69}    & 0.76    \\ \hline
+\end{tabular}
+\end{table}
 
 
 <!-- Consider adding this section about highly soluble molecules back to the paper for submission to a journal - it could prove interesting as a comment on 'hit detection', an interesting application of these models.
