@@ -1,10 +1,9 @@
 ---
-title: "Generalizable, Fast, and Accurate Deep-QSPR with `fastprop`"
-subtitle: "Part 1: Framework and Benchmarks"
+title: "Arbitrary Solute-Solvent Solubility Prediction with fastprop"
 author: 
-  - name: Jackson W. Burns \orcidlink{0000-0002-0657-9426}
-    affil-id: 1,**
   - name: Lucas Attia \orcidlink{0000-0002-9941-3846}
+    affil-id: 1,**
+  - name: Jackson W. Burns \orcidlink{0000-0002-0657-9426}
     affil-id: 1,**
   - name: Patrick S. Doyle \orcidlink{0000-0003-2147-9172}
     affil-id: 1
@@ -41,18 +40,105 @@ note: |
  This paper has been copied from github.com/JacksonBurns/fastprop (and modified).
 ---
 
-# Summary
- 1. Experimentalists find it useful to know the solubility of a solid in a solvent _a-priori_ to aid with synthesis.
- 2. Prior experimental data with known solubilities is both highly dispersed in the literature and incomplete.
- 3. This forces experimentalists to rely on models like the Abraham Solvation model to get an estimate of the solubility (which is also limited by the experimental data from which the model was derived) or as a lost resort simple empirical work which is time consuming.
- 4. Predicting solubility for _arbitrary_ pairs of solid solutes and liquid solvents at _arbitrary_ temperatures was then of course a perfect setting for Artificial Intelligence (AI), which in theory could learn the underlying physics dictating the solubility and make predictions outside of its experimental training.
- 5. Previous efforts by Vermeire et al. [@vermeire_solublility] used a combination of three D-MPNN models (via Chemprop [@chemprop_theory; @chemprop_software]) trained to predict different thermodynamic quantities to predict solubility. The best-case performance from that study was an RMSE of 0.44 and an MAE of 0.29.
- 6. We have demonstrated that we can instead train a Chemprop model which takes the temperature as an extra feature concatenated to the solvent and solute learned representations that matches the performance of the reference study after hyperparameter optimization: RMSE 0.400+/-0.034 MAE 0.294+/-0.027.
- 7. Even more noteworthy is that an alternative model architecture `fastprop` (GitHub.com/JacksonBurns/fastprop) is able to outperform both of these models using only classical molecular descriptors for the solute and solvent, again with the temperature concatenated to the FNN input: RMSE 0.231+/-0.061 MAE 0.133+/-0.025.
- 8. Separately from the pure improvement of the model is the interest in the 'high solubility' domain. It is often most interesting to identify which solvents are the _best_ at dissolving a given solid, so it is critical for the models to be especially accurate in this region of the data (are they?).
+# Introduction
+The solubilities of drug-like molecules in non-aqueous organic solvents are crucial properties for drug substance and drug product manufacturing. [@hewitt2009silico]
+Experimentally measuring non-aqueous solid solubility requires notoriously tedious experiments which are both time-consuming and resource-intensive. [@alsenz2007high]
+Thus, predicting organic solubility of drug-like molecules _a-priori_ based on their structure alone has been an active and robust area of academic and industrial research within the broader Quantitative Structure-Property Relationship (QSPR) domain. [@jorgensen2002prediction]
 
-# Results and Discussion
+The traditional approach relies on empirical solubility models like the Abraham Solvation model [@taft1985linear], which fits multiplicative solvent and solute coefficients to a given dataset which are then added to predict the solubility.
+These empirical approaches are incapable of extrapolation by their nature, limited by the experimental data from which they are derived.
+Recent work has instead explored applying molecular Machine Learning (ML) to this problem, which in theory could learn the underlying physics dictating the solubility and thus generalize to new solutes, solvents, and temperatures. [@lusci2013deep; @panapitiya2022evaluation]
 
+## Related Work
+Previous studies have employed deep neural networks (NNs) learning from molecular fingerprints [@zang2017silico] or molecular descriptors[@boobier2020machine; @tayyebi2023prediction] as well as graph convolutional NNs (GCNNs) [@chemprop_theory].
+Most similar to this study is the work of Panapitiya et al. which also uses molecular descriptors and a Multi-Layer Perceptron (MLP), though with a different feature set and network layout. [@panapitiya2022mdm]
+For a more complete review of the current landspace, see Llompart et al. [@llompart2024solubilityreview]
+
+Seeing the difficulty in directly mapping structures to solubility, recent studies have attempted to integrate the physics of solvation into the modeling approach.
+For example, previous efforts by Vermeire et al. [@vermeire_solublility] combined three Directed-Message Passing NNs (D-MPNN) (via Chemprop [@chemprop_theory; @chemprop_software]) to predict different thermodynamic quantities which are combined to estimate solubility.
+While this model demonstrates impressive performance in ultimately predicting solubility, the approach inherently leaks data since all solvent and solute molecules are seen during training; extrapolative data splitting would likely reveal worse model performance.
+Another example is the work of Yashaswi and coauthors [@yashaswi_interaction], who used an 'interaction block' in their NN.
+This intermediate layer performed a row-wise multiplication of the solute and solvent learned representations which was then passed to an MLP.
+This is analogous to training the model to map the structures to abraham-like solubility parameters, which are then weighted and combined for prediction.
+
+For the purpose of this study, we focus on extending the recently developed `fastprop` architecture, which has been demonstrated to outperform D-MPNN-based models in several molecular property prediction tasks using Mordred descriptors [@moriwaki2018mordred] with a deep MLP. [@fastprop]
+Here, we hypothesized that incorporating physics of solvation into the interaction between solute and solvent interactions in a `fastprop`-based model could lead to further improved model performance. 
+
+To this end, we present a physics-infused `fastprop` architecture which trains two separate MLP 'branches' to learn separate solute and solvent representations before combining the latent representations via a configurable interaction block.
+We believe this is the first systematic comparison of different interaction architectures for the task of molecular organic solubility prediction.
+This question of appropriately enforcing physics in our model is likely the most interesting and challenging aspect of this project.
+Since it is difficult to compare model performance directly to Vermeire et al. due to the previously specified data leak, we compared our model performance against datasets compiled by Boobier et al., which directly predicts solubility of various solutes in ethanol, benzene, and acetone at arbitrary temperatures. [@boobier2020machine]
+
+## Data
+We use the aforementioned solubility dataset published by Vermeire et al. [@vermeire_solublility] which is made available in a machine-readable format on Zenodo (https://zenodo.org/records/5970538).
+This dataset contains 6236 experimental solubility measurements (logS) with solute and solvent SMILES, as well as the temperature (K) of the experiment.
+The units of solubility (S), are mol solute/liter solvent, which is log-transformed in base 10 to get logS.
+The original collators performed extensive data curation so the reported solubility values are already well-sanitized and on a unified scale.
+We apply standard scaling to the feature values to ensure that the features are normally distributed during training.
+
+There are 99 unique solvents in the dataset, which is quite data-rich relative to other solubility datasets that often contain only single digit solvents, as in Boobier et al. (4 solvents). [@boobier2020machine]
+There are 165 unique solutes in the dataset with the median number of measurements being 14.
+Figure \ref{label_distribution} below shows the distribution of logS across the dataset which ranges from -8.8 to 2.0.
+
+![Distribution of logS Values in Vermiere et al. [@vermeire_solublility]\label{label_distribution}](../figures/label_distribution.png){ width=3in }
+
+The distribution is left-skewed with a unimodal peak near -1.
+Although 6236 datapoints is a relatively small dataset in the context of machine learning, this dataset is among the largest open-access experimental solubility datasets in literature.
+
+After training on the Vermeire dataset we also evaluated model performance on the Boobier dataset.
+This allowed us to directly benchmark our model performance to a solubility prediction task, which was not possible with the Vermeire dataset, and evaluate the capacity to extrapolate to unseen solutes.
+This comparison outside of the baseline study is unorthodox but important - the Vermeire dataset is superior for training due to its incredible diversity of solvents and temperature measurements, but a fair comparison of models requires training on the same task.
+
+The Boobier dataset contains far more solutes but only benzene, acetone, and ethanol as solvents [^1].
+This dataset contains **solutes in the three organic solvents included.
+The distribution of logS labels in the Boobier dataset are also shown below. 
+
+*make histogram of boobier dataset
+
+[^1]: The referenced study did not include temperatures for all measurements.
+The acetone dataset was reduced from 452 to 405, benzene from 464 to 425, and ethanol from 695 to 639 measurements.
+None of the aqueous solubility measurements include temperature, so the subset was dropped in its entirety.
+
+# Methods
+The typical `fastprop` architecture maps a single molecule's molecular descriptors to its property via an MLP.
+The most obvious approach to amend this to properties based on pairs of molecules would be to simply concatenate the two molecules' descriptor sets and pass the resulting vector to a larger MLP, also concatenating the temperature as an additional input.
+This 'architecture' is shown in Figure \label{unbranched_model}.
+
+![Unbranched Baseline Model.\label{unbranched_model}](../figures/unbranched_model.png){ width=4in }
+
+Molecule are represented using all of the Mordred descriptors, 1,613 each for the solvent and solute.
+Later hyperparameter optimization with Optuna [@akiba2019optuna] will select the hidden layers sizes $\in {200, 5000}$ and depth $\in {0, 2}$ and the choice of activation function.
+
+This baseline model is some arbitrary non-linear mapping between structures and solubility - essentially making _no_ assertions about the underlying physics.
+To incorporate physics we perform a second hyperparameter optimization on the architecture shown in Figure \ref{branched_model}.
+
+![Branched Physics-infused Model.\label{branched_model}](../figures/branched_model.png){ width=4in }
+
+The two separate MLPs for the solute and solvent descriptors allow for the network to learn unique latent embeddings for the two molecules, whereas in the baseline model they would necessarily be combined.
+This is done based on our physics understanding that a given solute or solvent has similar behavior across many combinations and thus one generally applicable embedding rather than infinitely many pair-specific embeddings.
+The choice of interaction block also reflects the underlying functional form of solvation physics.
+Row-wise multiplication is analogous to the aforementioned Abraham model whereas subtraction mimics a group additivity-style approach.
+By allowing the hyperparameter optimization to choose the interaction operation, depth and height of branch and interactions MLPs, and activation function we can systematically explore most effective method of infusing physics.
+
+Data is partitioned into training, validation, and testing based on a random split of the solutes.
+This allows the model to see all solvents during training but only a subset of solutes, thus evaluating its capacity to extrapolate to unseen solute structures.
+Solute extrapolation was chosen to reflect the expected application of this model.
+More often we are interested in predicting solubility for a new solute in an existing solvent than vice versa.
+
+Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE) are both used as evaluation metrics accordings to their typical defintions.
+Taking after Boobier et al. we also evaluate the percentage of predictions which are within 0.7 and 1.0 log units of the true value, thresholds which were determined in their study to consitute 'useful' models.
+
+# Results
+Story now: 
+- show results of big hyperparameter optimization. Model either chooses "naive nn magic," or physics-infused network
+- Then, evaluate model on the Boobier datasets to have a direct model comparison
+- Conclude: either physics infusion helps or doesn't
+- Also, training directly kinda gives better performance (if we showed interpolation, you can see improvement)
+
+We first present the results of the hyperparameter optimization over the physics-infused fastprop model architecure. **describe optimized model and its' metrics*.  
+- implications of the optimized architecture
+
+Then, we evaluated this model on the Boobier benezene, acetone, and ethanol datasets. *describe model performance and compare directly to the metrics in their paper* 
 Out of the box `fastprop` results:
 ```
 [03/12/2024 12:56:40 PM fastprop.fastprop_core] INFO: Displaying validation results:
@@ -132,7 +218,15 @@ Overall test r2 = 0.908125 +/- 0.000000
 Elapsed time = 0:10:37
 ```
 
-# High Solubility Region
+<!-- Consider adding this section about highly soluble molecules back to the paper for submission to a journal - it could prove interesting as a comment on 'hit detection', an interesting application of these models.
+
+## Highly Soluble Species
+Story:
+ - Vermeire devised a method to predict solubility of arbitrary combinations of molecules at any temperature.
+ - Attia was using this for an actual system in research, it was supposed to be highly soluble, the model predicted a non-physical high value.
+ - On further investigation, _approximately_ 90% of the data falls in the range of insoluble to 1/3 of the max, 10% in the range of 1/3rd most to 2/3rd most, and only 1% of the dataset is in the range of very high solubility the remaining 1/3rd of the solublity range
+ - Ideas: apply power scaling to smooth this range, then train another chemprop model to see if it works; train a fastprop model on the whole data and this range for comparison.
+ - Limitation - not interested in any other than STP, so retraining the model in the future will be required for fair comparison (unless we want to add temperature to fastprop, which is possible) after we use the published model just to check the accuracy on this limited range 
 
 If we drop all datapoints where the solubility is less than 1 mol/L, performance changes dramatically.
 
@@ -179,7 +273,20 @@ Overall test mae = 0.202236 +/- 0.000000
 Overall test r2 = 0.329536 +/- 0.000000
 Elapsed time = 0:00:49
 ```
+-->
 
+# Conclusion
+
+
+<!-- These two sections can be removed after submitting the class report - they are likely not needed for a journal submission. -->
+# Contributions
+
+# Code
+Code is available via GitHub
+
+# Results and Discussion
+
+<!-- These sections should be added back for the eventual paper submission.
 # Declarations
 
 ## Availability of data and materials
@@ -200,6 +307,6 @@ Neither the United States Government nor any agency thereof, nor any of their em
 Reference herein to any specific commercial product, process, or service by trade name, trademark, manufacturer, or otherwise does not necessarily constitute or imply its
 endorsement, recommendation, or favoring by the United States Government or any agency
 thereof.
-The views and opinions of authors expressed herein do not necessarily state or reflect those of the United States Government or any agency thereof.
+The views and opinions of authors expressed herein do not necessarily state or reflect those of the United States Government or any agency thereof. -->
 
 # Cited Works
