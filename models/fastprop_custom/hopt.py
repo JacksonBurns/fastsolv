@@ -6,7 +6,7 @@ import pandas as pd
 import psutil
 import ray
 import torch
-from astartes import train_val_test_split
+from astartes import train_test_split
 from fastprop.data import fastpropDataLoader, standard_scale
 from fastprop.defaults import _init_loggers, init_logger
 from fastprop.model import fastprop, train_and_test
@@ -21,24 +21,26 @@ from model import fastpropSolubility
 logger = init_logger(__name__)
 
 NUM_HOPT_TRIALS = 32
-ENABLE_BRANCHES = False
+ENABLE_BRANCHES = True
+NUM_REPLICATES = 8
 
 
 def define_by_run_func(trial):
-    trial.suggest_int("hidden_size", 200, 3000, 200)
-    trial.suggest_int("interaction_layers", 0, 4, 1)
+    trial.suggest_int("interaction_hidden_size", 400, 3_200, 400)
+    trial.suggest_int("branch_hidden_size", 200, 2_200, 400)
+    trial.suggest_int("interaction_layers", 0, 3, 1)
     interaction = trial.suggest_categorical("interaction", ("concatenation", "multiplication", "subtraction"))
 
     if ENABLE_BRANCHES:
         # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation
-        solvent_layers = trial.suggest_int("solvent_layers", 0, 4, 1)
+        solvent_layers = trial.suggest_int("solvent_layers", 0, 3, 1)
         if interaction == "concatenation":
-            trial.suggest_int("solute_layers", 0, 4, 1)
+            trial.suggest_int("solute_layers", 0, 3, 1)
         else:
             if solvent_layers == 0:
                 trial.suggest_int("solute_layers", 0, 0)
             else:
-                trial.suggest_int("solute_layers", 1, 4, 1)
+                trial.suggest_int("solute_layers", 1, 3, 1)
     else:
         return {"solute_layers": 0, "solvent_layers": 0}
 
@@ -80,7 +82,7 @@ def main():
         ),
         tune_config=tune.TuneConfig(
             search_alg=algo,
-            max_concurrent_trials=2,
+            max_concurrent_trials=1,
             num_samples=NUM_HOPT_TRIALS,
             metric=metric,
             mode="min",
@@ -108,15 +110,17 @@ def _hopt_objective(
     solute_df = ray.get(solute_df_ref)
     random_seed = 42
     enable_reproducibility(random_seed)
+    solutes_hopt, solutes_test = train_test_split(pd.unique(solute_df["solute_smiles"]), random_state=random_seed)
+    test_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_test)].tolist()
+    hopt_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_hopt)].tolist()
     all_test_results, all_validation_results = [], []
-    for replicate_number in range(3):
-        logger.info(f"Training model {replicate_number+1} of 3 ({random_seed=})")
+    for replicate_number in range(NUM_REPLICATES):
+        logger.info(f"Training model {replicate_number+1} of {NUM_REPLICATES} ({random_seed=})")
 
         # split the data s.t. some solutes are not seen during training
-        solutes_train, solutes_val, solutes_test = train_val_test_split(pd.unique(solute_df["solute_smiles"]), random_state=random_seed)
+        solutes_train, solutes_val = train_test_split(pd.unique(solute_df["solute_smiles"][hopt_indexes]), random_state=random_seed)
         train_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_train)].tolist()
         val_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_val)].tolist()
-        test_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_test)].tolist()
 
         # rescale ALL the things
         solute_features[train_indexes], solute_feature_means, solute_feature_vars = standard_scale(solute_features[train_indexes])
@@ -165,11 +169,12 @@ def _hopt_objective(
         model = fastpropSolubility(
             trial["solute_layers"],
             trial["solvent_layers"],
+            trial["branch_hidden_size"],
+            trial["interaction_layers"],
+            trial["interaction_hidden_size"],
             trial["interaction"],
             1_613,
-            trial["interaction_layers"],
             0.001,
-            trial["hidden_size"],
         )
         logger.info("Model architecture:\n{%s}", str(model))
         test_results, validation_results = train_and_test(

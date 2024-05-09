@@ -33,11 +33,12 @@ class fastpropSolubility(_fastprop):
         self,
         num_solute_representation_layers: int = 0,
         num_solvent_representation_layers: int = 0,
+        branch_hidden_size: int = 1000,
+        num_interaction_layers: int = 0,
+        interaction_hidden_size: int = 1600,
         interaction_operation: Literal["concatenation", "multiplication", "subtraction"] = "concatenation",
         num_features: int = 1613,
-        num_interaction_layers: int = 0,
         learning_rate: float = 0.001,
-        hidden_size: int = 1600,
         target_means: torch.Tensor = None,
         target_vars: torch.Tensor = None,
     ):
@@ -59,30 +60,30 @@ class fastpropSolubility(_fastprop):
         # solute
         solute_modules = []
         for i in range(num_solute_representation_layers):  # hidden layers
-            solute_modules.append(torch.nn.Linear(num_features if i == 0 else hidden_size, hidden_size))
+            solute_modules.append(torch.nn.Linear(num_features if i == 0 else branch_hidden_size, branch_hidden_size))
             if ENABLE_SNN:
                 solute_modules.append(torch.nn.SELU())
                 if ENABLE_DROPOUT:
                     solute_modules.append(torch.nn.AlphaDropout())
             else:
-                solute_modules.append(torch.nn.ReLU())
+                solute_modules.append(torch.nn.ReLU6())
                 if ENABLE_DROPOUT:
                     solute_modules.append(torch.nn.Dropout())
-        solute_hidden_size = num_features if num_solute_representation_layers == 0 else hidden_size
+        solute_hidden_size = num_features if num_solute_representation_layers == 0 else branch_hidden_size
 
         # solvent
         solvent_modules = []
         for i in range(num_solvent_representation_layers):  # hidden layers
-            solvent_modules.append(torch.nn.Linear(num_features if i == 0 else hidden_size, hidden_size))
+            solvent_modules.append(torch.nn.Linear(num_features if i == 0 else branch_hidden_size, branch_hidden_size))
             if ENABLE_SNN:
-                solute_modules.append(torch.nn.SELU())
+                solvent_modules.append(torch.nn.SELU())
                 if ENABLE_DROPOUT:
-                    solute_modules.append(torch.nn.AlphaDropout())
+                    solvent_modules.append(torch.nn.AlphaDropout())
             else:
-                solute_modules.append(torch.nn.ReLU())
+                solvent_modules.append(torch.nn.ReLU6())
                 if ENABLE_DROPOUT:
-                    solute_modules.append(torch.nn.Dropout())
-        solvent_hidden_size = num_features if num_solvent_representation_layers == 0 else hidden_size
+                    solvent_modules.append(torch.nn.Dropout())
+        solvent_hidden_size = num_features if num_solvent_representation_layers == 0 else branch_hidden_size
 
         # assemble modules (if empty, just passes input through)
         self.solute_representation_module = torch.nn.Sequential(*solute_modules)
@@ -107,19 +108,19 @@ class fastpropSolubility(_fastprop):
             else:
                 raise TypeError(f"Unknown interaction operation '{interaction_operation}'!")
         for i in range(num_interaction_layers):  # hidden layers
-            interaction_modules.append(torch.nn.Linear(num_interaction_features if i == 0 else hidden_size + 1, hidden_size + 1))
+            interaction_modules.append(torch.nn.Linear(num_interaction_features if i == 0 else interaction_hidden_size + 1, interaction_hidden_size + 1))
             if ENABLE_SNN:
                 solute_modules.append(torch.nn.SELU())
                 if ENABLE_DROPOUT:
                     solute_modules.append(torch.nn.AlphaDropout())
             else:
-                solute_modules.append(torch.nn.ReLU())
+                solute_modules.append(torch.nn.ReLU6())
                 if ENABLE_DROPOUT:
                     solute_modules.append(torch.nn.Dropout())
         self.interaction_module = torch.nn.Sequential(*interaction_modules)
 
         # readout
-        self.readout = torch.nn.Linear(num_interaction_features if num_interaction_layers == 0 else hidden_size + 1, 1)
+        self.readout = torch.nn.Linear(num_interaction_features if num_interaction_layers == 0 else interaction_hidden_size + 1, 1)
         self.save_hyperparameters()
 
     def forward(self, batch):
@@ -138,6 +139,6 @@ if __name__ == "__main__":
     temperature = torch.rand((4, 1))
     batch = (solute, solvent, temperature)
 
-    model = fastpropSolubility(2, 1, "multiplication", 1_613, 2, 1e-3, 1_600)
+    model = fastpropSolubility(2, 1, 1000, 2, 1600, "multiplication", 1_613, 1e-3)
     print(model)
     print(model(batch))
