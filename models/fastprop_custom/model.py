@@ -110,13 +110,13 @@ class fastpropSolubility(_fastprop):
         for i in range(num_interaction_layers):  # hidden layers
             interaction_modules.append(torch.nn.Linear(num_interaction_features if i == 0 else interaction_hidden_size + 1, interaction_hidden_size + 1))
             if ENABLE_SNN:
-                solute_modules.append(torch.nn.SELU())
+                interaction_modules.append(torch.nn.SELU())
                 if ENABLE_DROPOUT:
-                    solute_modules.append(torch.nn.AlphaDropout())
+                    interaction_modules.append(torch.nn.AlphaDropout())
             else:
-                solute_modules.append(torch.nn.ReLU6())
+                interaction_modules.append(torch.nn.ReLU6())
                 if ENABLE_DROPOUT:
-                    solute_modules.append(torch.nn.Dropout())
+                    interaction_modules.append(torch.nn.Dropout())
         self.interaction_module = torch.nn.Sequential(*interaction_modules)
 
         # readout
