@@ -130,12 +130,6 @@ Taking after Boobier et al. we also evaluate the percentage of predictions which
 
 **add training details: number of epochs, learning rate, early stopping/patience, optimizer (adam)
 # Results
-Story now: 
-- show results of big hyperparameter optimization. Model either chooses "naive nn magic," or physics-infused network
-- Then, evaluate model on the Boobier datasets to have a direct model comparison
-- Conclude: either physics infusion helps or doesn't
-- Also, training directly kinda gives better performance (if we showed interpolation, you can see improvement)
-
 We first evaluate the performance of the baseline unbranched model, which concatenates the solute and solvent descriptors and feeds them to an MLP. We used the hyperparameters summarized in the table below. 
 
 \begin{table}[]
@@ -163,13 +157,17 @@ RMSE              & \multicolumn{1}{c|}{0.73}       & 0.71 & \multicolumn{1}{c|}
 
 We next performed hyperparameter optimization on fastsolv, identifying the optimal hyperparameters as shown in the table below:
 
-| Solute branch hidden layers  | 3              |
-|------------------------------|----------------|
-| Solvent branch hidden layers | 3              |
-| Branch layer dimension       | 1000           |
-| Interaction layers           | 1              |
-| Interaction layer dimension  | 400            |
-| Interaction operation        | multiplication |
+\begin{table}[]
+\begin{tabular}{|l|l|}
+\hline
+Solute branch hidden layers  & 3              \\ \hline
+Solvent branch hidden layers & 3              \\ \hline
+Branch layer dimension       & 1000           \\ \hline
+Interaction layers           & 1              \\ \hline
+Interaction layer dimension  & 400            \\ \hline
+Interaction operation        & multiplication \\ \hline
+\end{tabular}
+\end{table}
 
 The optimizied fastsolv model passes the descriptors of the solute and solvent through 3 hidden layers each, before multiplying the resulting learned representations, and passing the solution representation through another hidden layer in the interaction module. We next evaluated the optimized fastsolv model on the Vermeire and Boobier datasets. The results are summarized in the table below. 
 
@@ -248,15 +246,13 @@ Elapsed time = 0:00:49
 -->
 
 # Conclusion
-
+Here, we explored descriptor-based models for molecular property prediciton of temperature-dependent solid solubulity, using Mordred descriptors as inputs to the model. We developed a physics-infused architecture, which learns latent representations of the solvent and solute molecular independently, then multiplies these learned representations to give a solution representation, which is passed through an MLP and reads out solubility. We compared the performance of a baseline descriptor model to the physics-infused model, fastsolv, on the solubility datasets compiled by Vermiere and Boobier. Both models interpolated and extrapolated into new solutes within the Vermiere dataset similarly well, but fastsolv dramatically improved extrapolation into the fast solute space of Boobier much more effectively. For a realistic drug discovery application, predicting solubility of an arbitrary solute is crucial. The ability of fastsolv to extrapolate to new solutes presents utility in such applications. Overall, this work presents the value of providing machine learning models with physical inductive bias in molecular machine learning tasks. 
 
 <!-- These two sections can be removed after submitting the class report - they are likely not needed for a journal submission. -->
 # Contributions
-
+Burns and Attia both contributed to ideation, code development, and writing. 
 # Code
 Code is available via GitHub
-
-# Results and Discussion
 
 <!-- These sections should be added back for the eventual paper submission.
 # Declarations
