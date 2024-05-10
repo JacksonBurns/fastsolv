@@ -20,10 +20,12 @@ from model import fastpropSolubility
 
 logger = init_logger(__name__)
 
-NUM_HOPT_TRIALS = 32
+NUM_HOPT_TRIALS = 1
 ENABLE_BRANCHES = True
-NUM_REPLICATES = 8
+NUM_REPLICATES = 1
 
+
+# TODO: nested repetitions (change test set)
 
 def define_by_run_func(trial):
     trial.suggest_int("interaction_hidden_size", 400, 3_200, 400)

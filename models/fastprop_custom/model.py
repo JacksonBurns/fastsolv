@@ -28,6 +28,15 @@ class Subtraction(torch.nn.Module):
         return torch.cat((batch[0] - batch[1], batch[2]), dim=1)
 
 
+class ReLUn(torch.nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.n = torch.nn.Parameter(torch.randn(()))
+    
+    def forward(self, batch: torch.Tensor):
+        return batch.maximum(0).minimum(self.n)
+
+
 class fastpropSolubility(_fastprop):
     def __init__(
         self,
@@ -66,7 +75,7 @@ class fastpropSolubility(_fastprop):
                 if ENABLE_DROPOUT:
                     solute_modules.append(torch.nn.AlphaDropout())
             else:
-                solute_modules.append(torch.nn.ReLU6())
+                solute_modules.append(ReLUn())
                 if ENABLE_DROPOUT:
                     solute_modules.append(torch.nn.Dropout())
         solute_hidden_size = num_features if num_solute_representation_layers == 0 else branch_hidden_size
@@ -80,7 +89,7 @@ class fastpropSolubility(_fastprop):
                 if ENABLE_DROPOUT:
                     solvent_modules.append(torch.nn.AlphaDropout())
             else:
-                solvent_modules.append(torch.nn.ReLU6())
+                solvent_modules.append(ReLUn())
                 if ENABLE_DROPOUT:
                     solvent_modules.append(torch.nn.Dropout())
         solvent_hidden_size = num_features if num_solvent_representation_layers == 0 else branch_hidden_size
@@ -114,7 +123,7 @@ class fastpropSolubility(_fastprop):
                 if ENABLE_DROPOUT:
                     interaction_modules.append(torch.nn.AlphaDropout())
             else:
-                interaction_modules.append(torch.nn.ReLU6())
+                interaction_modules.append(ReLUn())
                 if ENABLE_DROPOUT:
                     interaction_modules.append(torch.nn.Dropout())
         self.interaction_module = torch.nn.Sequential(*interaction_modules)

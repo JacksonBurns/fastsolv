@@ -19,7 +19,7 @@ from model import fastpropSolubility
 logger = init_logger(__name__)
 
 
-NUM_REPLICATES = 8
+NUM_REPLICATES = 1
 
 
 def logS_within_0_7_percentage(truth: torch.Tensor, prediction: torch.Tensor, ignored: None, multitask: bool = False):
@@ -64,6 +64,13 @@ def main():
     ethanol_temperatures = torch.tensor(df.iloc[:, 2].to_numpy(), dtype=torch.float32).unsqueeze(-1)
     ethanol_solute_features = torch.tensor(df.iloc[:, 4 : (4 + 1_613)].to_numpy(), dtype=torch.float32)
     ethanol_solvent_features = torch.tensor(df.iloc[:, (4 + 1_613) :].to_numpy(), dtype=torch.float32)
+    
+    # load the other holdout data
+    df = pd.read_csv(Path("holdout_set_2/llompart_features.csv"), index_col=0)
+    llompart_solubilities = torch.tensor(df.iloc[:, 3].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+    llompart_temperatures = torch.tensor(df.iloc[:, 0].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+    llompart_solute_features = torch.tensor(df.iloc[:, 4 : (4 + 1_613)].to_numpy(), dtype=torch.float32)
+    llompart_solvent_features = torch.tensor(df.iloc[:, (4 + 1_613) :].to_numpy(), dtype=torch.float32)
 
     logger.info("Run 'tensorboard --logdir output/tensorboard_logs' to track training progress.")
     random_seed = 42
@@ -72,6 +79,7 @@ def main():
     hopt_indexes = solute_df.index[solute_df["solute_smiles"].isin(solutes_hopt)].tolist()
     all_test_results, all_validation_results = [], []
     acetone_results, benzene_results, ethanol_results = [], [], []
+    llompart_results = []
     for replicate_number in range(NUM_REPLICATES):
         logger.info(f"Training model {replicate_number+1} of {NUM_REPLICATES} ({random_seed=})")
 
@@ -110,6 +118,11 @@ def main():
         ethanol_solute_features = standard_scale(ethanol_solute_features, solute_feature_vars, solute_feature_vars)
         ethanol_solubilities = standard_scale(ethanol_solubilities, solubility_means, solubility_vars)
         ethanol_temperatures = standard_scale(ethanol_temperatures, temperature_means, temperature_vars)
+
+        llompart_solvent_features = standard_scale(llompart_solvent_features, solvent_feature_means, solvent_feature_vars)
+        llompart_solute_features = standard_scale(llompart_solute_features, solute_feature_vars, solute_feature_vars)
+        llompart_solubilities = standard_scale(llompart_solubilities, solubility_means, solubility_vars)
+        llompart_temperatures = standard_scale(llompart_temperatures, temperature_means, temperature_vars)
 
         train_dataloader = fastpropDataLoader(
             SolubilityDataset(
@@ -160,6 +173,14 @@ def main():
                 ethanol_solubilities,
             )
         )
+        llompart_dataloader = fastpropDataLoader(
+            SolubilityDataset(
+                llompart_solute_features,
+                llompart_solvent_features,
+                llompart_temperatures,
+                llompart_solubilities,
+            )
+        )
 
         # initialize the model and train/test
         model = fastpropSolubility(
@@ -187,6 +208,8 @@ def main():
         benzene_results.append(result[0])
         result = trainer.test(model, ethanol_dataloader, verbose=False)
         ethanol_results.append(result[0])
+        result = trainer.test(model, llompart_dataloader, verbose=False)
+        llompart_results.append(result[0])
 
         random_seed += 1
         # ensure that the model is re-instantiated
@@ -203,6 +226,8 @@ def main():
     logger.info("Displaying benzene holdout set results:\n%s", holdout_results_df.describe().transpose().to_string())
     holdout_results_df = pd.DataFrame.from_records(ethanol_results)
     logger.info("Displaying ethanol holdout set results:\n%s", holdout_results_df.describe().transpose().to_string())
+    holdout_results_df = pd.DataFrame.from_records(llompart_results)
+    logger.info("Displaying llompart holdout set results:\n%s", holdout_results_df.describe().transpose().to_string())
 
 
 if __name__ == "__main__":
