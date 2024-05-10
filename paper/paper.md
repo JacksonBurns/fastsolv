@@ -107,7 +107,7 @@ This 'architecture' is shown in Figure \ref{unbranched_model}.
 ![Unbranched Baseline Model.\label{unbranched_model}](../figures/unbranched_model.png){ width=4in }
 
 Molecule are represented using all of the Mordred descriptors, 1,613 each for the solvent and solute.
-Later hyperparameter optimization with Optuna [@akiba2019optuna] will select the hidden layers sizes $\in {200, 5000}$ and depth $\in {0, 2}$ and the choice of activation function.
+Later hyperparameter optimization with Optuna [@akiba2019optuna] will select the hidden layers sizes $\in {200, 5000}$ and depth $\in {0, 2}$ and the choice of activation function (ReLU [@agarap2018deep] or ReLU6 [howard2017mobilenets]).
 
 This baseline model is some arbitrary non-linear mapping between structures and solubility - essentially making _no_ assertions about the underlying physics.
 To incorporate physics we perform a second hyperparameter optimization on the architecture shown in Figure \ref{branched_model}.
@@ -125,10 +125,13 @@ This allows the model to see all solvents during training but only a subset of s
 Solute extrapolation was chosen to reflect the expected application of this model.
 More often we are interested in predicting solubility for a new solute in an existing solvent than vice versa.
 
-Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE) are both used as evaluation metrics accordings to their typical defintions.
-Taking after Boobier et al. we also evaluate the percentage of predictions which are within 0.7 and 1.0 log units of the true value, thresholds which were determined in their study to consitute 'useful' models. 
+Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE) are both used as evaluation metrics according to their typical definitions.
+Taking after Boobier et al. we also evaluate the percentage of predictions which are within 0.7 and 1.0 log units of the true value, thresholds which were determined in their study to constitute 'useful' models. 
 
-**add training details: number of epochs, learning rate, early stopping/patience, optimizer (adam)
+Every model was allowed to train for 50 epochs using the Adam optimizer [@kingma2017adam] and learning rate of 0.001.
+Training would be stopped early with a patience of 10 epochs.
+This configuration was chosen to ensure that even the largest networks attempted during hyperparameter optimization would have adequate time to converge during training.
+
 # Results
 We first evaluate the performance of the baseline unbranched model, which concatenates the solute and solvent descriptors and feeds them to an MLP. We used the hyperparameters summarized in the table below. 
 
@@ -141,7 +144,7 @@ Hidden layer dimension & 3000 \\ \hline
 \end{tabular}
 \end{table}
 
-The baseline model performance on all four datasets are summarized below. We observe strong extrapolation within the Vermeire dataset, with nearly identical error on the validation ($\text{RMSE} = 0.73$) and solute hold-out test set ($\text{RMSE} = 0.71$). However, when extrapolating to the solutes in the Boobier dataset, we observe much worse performance, with $\text{RMSE} = 1.67$ for solubility in acetone, $\text{RMSE} = 1.55$ for solubility in benzene, and $\text{RMSE} = 1.45$ for solubility in ethanol. This poor performance is not surprising, given that the solute diversity (1440 unique solutes) in the Boobier presents a difficult extrapolatory task. 
+The baseline model performance on all four datasets are summarized below. We observe strong extrapolation within the Vermeire dataset, with nearly identical error on the validation ($\text{RMSE} = 0.73$) and solute hold-out test set ($\text{RMSE} = 0.71$). However, when extrapolating to the solutes in the Boobier dataset, we observe much worse performance, with $\text{RMSE} = 1.67$ for solubility in acetone, $\text{RMSE} = 1.55$ for solubility in benzene, and $\text{RMSE} = 1.45$ for solubility in ethanol. This poor performance is not surprising, given that the solute diversity (1440 unique solutes) in the Boobier presents a difficult extrapolation task. 
 
 *add table caption and label
 \begin{table}[]
@@ -247,11 +250,12 @@ Elapsed time = 0:00:49
 -->
 
 # Conclusion
-Here, we explored descriptor-based models for molecular property prediciton of temperature-dependent solid solubulity, using Mordred descriptors as inputs to the model. We developed a physics-infused architecture, which learns latent representations of the solvent and solute molecular independently, then multiplies these learned representations to give a solution representation, which is passed through an MLP and reads out solubility. We compared the performance of a baseline descriptor model to the physics-infused model, fastsolv, on the solubility datasets compiled by Vermiere and Boobier. Both models interpolated and extrapolated into new solutes within the Vermiere dataset similarly well, but fastsolv dramatically improved extrapolation into the fast solute space of Boobier much more effectively. For a realistic drug discovery application, predicting solubility of an arbitrary solute is crucial. The ability of fastsolv to extrapolate to new solutes presents utility in such applications. Overall, this work presents the value of providing machine learning models with physical inductive bias in molecular machine learning tasks. 
+Here, we explored descriptor-based models for molecular property prediction of temperature-dependent solid solubility, using Mordred descriptors as inputs to the model. We developed a physics-infused architecture, which learns latent representations of the solvent and solute molecular independently, then multiplies these learned representations to give a solution representation, which is passed through an MLP and reads out solubility. We compared the performance of a baseline descriptor model to the physics-infused model, fastsolv, on the solubility datasets compiled by Vermiere and Boobier. Both models interpolated and extrapolated into new solutes within the Vermiere dataset similarly well, but fastsolv dramatically improved extrapolation into the fast solute space of Boobier much more effectively. For a realistic drug discovery application, predicting solubility of an arbitrary solute is crucial. The ability of fastsolv to extrapolate to new solutes presents utility in such applications. Overall, this work presents the value of providing machine learning models with physical inductive bias in molecular machine learning tasks. 
 
 <!-- These two sections can be removed after submitting the class report - they are likely not needed for a journal submission. -->
 # Contributions
-Burns and Attia both contributed to ideation, code development, and writing. 
+Burns and Attia both contributed to ideation, code development, and writing.
+
 # Code
 Code is available via GitHub
 
