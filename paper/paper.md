@@ -5,18 +5,18 @@ author:
     affil-id: 1,**
   - name: Jackson W. Burns \orcidlink{0000-0002-0657-9426}
     affil-id: 1,**
-  - name: Patrick S. Doyle \orcidlink{0000-0003-2147-9172}
-    affil-id: 1
-  - name: William H. Green \orcidlink{0000-0003-2603-9694}
-    affil-id: 1,*
+  # - name: Patrick S. Doyle \orcidlink{0000-0003-2147-9172}
+  #   affil-id: 1
+  # - name: William H. Green \orcidlink{0000-0003-2603-9694}
+  #   affil-id: 1,*
 affiliations:
   - id: 1
     name: Massachusetts Institute of Technology, Cambridge, MA
-  - id: "*"
-    name: "Corresponding: whgreen@mit.edu"
+  # - id: "*"
+  #   name: "Corresponding: whgreen@mit.edu"
   - id: "**"
     name: "Equal Contribution"
-date: March 12, 2024
+date: May 10, 2024
 geometry: margin=1in
 bibliography: paper.bib
 citation-style: journal-of-cheminformatics
@@ -102,7 +102,7 @@ None of the aqueous solubility measurements include temperature, so the subset w
 # Methods
 The typical `fastprop` architecture maps a single molecule's molecular descriptors to its property via an MLP.
 The most obvious approach to amend this to properties based on pairs of molecules would be to simply concatenate the two molecules' descriptor sets and pass the resulting vector to a larger MLP, also concatenating the temperature as an additional input.
-This 'architecture' is shown in Figure \label{unbranched_model}.
+This 'architecture' is shown in Figure \ref{unbranched_model}.
 
 ![Unbranched Baseline Model.\label{unbranched_model}](../figures/unbranched_model.png){ width=4in }
 
@@ -133,6 +133,7 @@ Taking after Boobier et al. we also evaluate the percentage of predictions which
 We first evaluate the performance of the baseline unbranched model, which concatenates the solute and solvent descriptors and feeds them to an MLP. We used the hyperparameters summarized in the table below. 
 
 \begin{table}[]
+\centering
 \begin{tabular}{|c|c|}
 \hline
 Hidden layers          & 2    \\ \hline
