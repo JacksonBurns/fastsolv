@@ -90,8 +90,8 @@ This allowed us to directly benchmark our model performance to a solubility pred
 This comparison outside of the baseline study is unorthodox but important - the Vermeire dataset is superior for training due to its incredible diversity of solvents and temperature measurements, but a fair comparison of models requires training on the same task.
 
 The Boobier dataset contains far more solutes but only benzene, acetone, and ethanol as solvents [^1].
-This dataset contains a huge diversity in solutes: the benzene dataset contains 425 unique solutes, the acetone dataset contains 405, and the ethanol dataset contains 639. Removing the intersection between these datasets yields 1440 unique solutes in total.
-The distribution of logS labels in each solvent in the Boobier dataset are also shown below. 
+This dataset contains a huge diversity in solutes, with 1131 unique solutes, of which 1082 are not found in the Vermiere dataset. This dataset thus represents an extremely stringent solute extrapolation task for the models trained on the Vermeire dataset. 
+The distribution of logS labels in each solvent in the Boobier dataset are also shown below in Figure \ref{boobier_label_distribution}. 
 
 ![Distribution of logS Values in Boobier et al. [@boobier2020machine]\label{boobier_label_distribution}](../figures/boobier_label_distribution.png){ width=3in }
 
@@ -133,7 +133,8 @@ Training would be stopped early with a patience of 10 epochs.
 This configuration was chosen to ensure that even the largest networks attempted during hyperparameter optimization would have adequate time to converge during training.
 
 # Results
-We first evaluate the performance of the baseline unbranched model, which concatenates the solute and solvent descriptors and feeds them to an MLP. We used the hyperparameters summarized in the table below. 
+We first evaluate the performance of the baseline unbranched model, which concatenates the solute and solvent descriptors and feeds them to an MLP. We used the hyperparameters summarized in Table \ref{baseline_opt} below. 
+
 
 \begin{table}[]
 \centering
@@ -142,12 +143,13 @@ We first evaluate the performance of the baseline unbranched model, which concat
 Hidden layers          & 2    \\ \hline
 Hidden layer dimension & 3000 \\ \hline
 \end{tabular}
+ \caption{Optimized baseline model hyperparameters.}
+ \label{baseline_opt} 
 \end{table}
 
-The baseline model performance on all four datasets are summarized below. We observe strong extrapolation within the Vermeire dataset, with nearly identical error on the validation ($\text{RMSE} = 0.73$) and solute hold-out test set ($\text{RMSE} = 0.71$). However, when extrapolating to the solutes in the Boobier dataset, we observe much worse performance, with $\text{RMSE} = 1.67$ for solubility in acetone, $\text{RMSE} = 1.55$ for solubility in benzene, and $\text{RMSE} = 1.45$ for solubility in ethanol. This poor performance is not surprising, given that the solute diversity (1440 unique solutes) in the Boobier presents a difficult extrapolation task. 
+The baseline model performance on all four datasets are summarized in Table \ref{baseline_results} below. We observe strong extrapolation within the Vermeire dataset, with nearly identical error on the validation ($\text{RMSE} = 0.73$) and solute hold-out test set ($\text{RMSE} = 0.71$). However, when extrapolating to the solutes in the Boobier dataset, we observe much worse performance, with $\text{RMSE} = 1.67$ for solubility in acetone, $\text{RMSE} = 1.55$ for solubility in benzene, and $\text{RMSE} = 1.45$ for solubility in ethanol. This poor performance is not surprising, given that the solute diversity (1440 unique solutes) in the Boobier presents a difficult extrapolation task. 
 
-*add table caption and label
-\begin{table}[]
+\begin{table}[] \centering
 \begin{tabular}{|c|cc|ccc|}
 \hline
                   & \multicolumn{2}{c|}{Vermeire}          & \multicolumn{3}{c|}{Boobier}                                          \\ \hline
@@ -157,11 +159,13 @@ RMSE              & \multicolumn{1}{c|}{0.73}       & 0.71 & \multicolumn{1}{c|}
 \% logS $\pm$ 0.7 & \multicolumn{1}{c|}{0.65}       & 0.70 & \multicolumn{1}{c|}{0.24}    & \multicolumn{1}{c|}{0.27}    & 0.30    \\ \hline
 \% logS $\pm$ 1.0 & \multicolumn{1}{c|}{0.82}       & 0.82 & \multicolumn{1}{c|}{0.34}    & \multicolumn{1}{c|}{0.39}    & 0.43    \\ \hline
 \end{tabular}
+ \caption{Baseline model performance}
+ \label{baseline_results} 
 \end{table}
 
-We next performed hyperparameter optimization on fastsolv, identifying the optimal hyperparameters as shown in the table below:
+We next performed hyperparameter optimization on fastsolv, identifying the optimal hyperparameters as shown in Table \ref{fastolv_opt} below.
 
-\begin{table}[]
+\begin{table}[] \centering
 \begin{tabular}{|l|l|}
 \hline
 Solute branch hidden layers  & 3              \\ \hline
@@ -171,11 +175,13 @@ Interaction layers           & 1              \\ \hline
 Interaction layer dimension  & 400            \\ \hline
 Interaction operation        & multiplication \\ \hline
 \end{tabular}
+ \caption{Optimized fastsolv hyperparameters.}
+ \label{fastsolv_opt} 
 \end{table}
 
-The optimizied fastsolv model passes the descriptors of the solute and solvent through 3 hidden layers each, before multiplying the resulting learned representations, and passing the solution representation through another hidden layer in the interaction module. We next evaluated the optimized fastsolv model on the Vermeire and Boobier datasets. The results are summarized in the table below. 
+The optimizied fastsolv model passes the descriptors of the solute and solvent through 3 hidden layers each, before multiplying the resulting learned representations, and passing the solution representation through another hidden layer in the interaction module. We next evaluated the optimized fastsolv model on the Vermeire and Boobier datasets. The results are summarized in Table \ref{fastsolv_results} below. 
 
-\begin{table}[]
+\begin{table}[] \centering
 \begin{tabular}{|c|cc|ccc|}
 \hline
                   & \multicolumn{2}{c|}{Vermeire}          & \multicolumn{3}{c|}{Boobier}                                          \\ \hline
@@ -185,9 +191,11 @@ RMSE              & \multicolumn{1}{c|}{0.68}       & 0.70 & \multicolumn{1}{c|}
 \% logS $\pm$ 0.7 & \multicolumn{1}{c|}{0.68}       & 0.65 & \multicolumn{1}{c|}{0.60}    & \multicolumn{1}{c|}{0.50}    & 0.55    \\ \hline
 \% logS $\pm$ 1.0 & \multicolumn{1}{c|}{0.84}       & 0.84 & \multicolumn{1}{c|}{0.78}    & \multicolumn{1}{c|}{0.69}    & 0.76    \\ \hline
 \end{tabular}
+\caption{Fastsolv model performance}
+\label{fastsolv_results} 
 \end{table}
 
-We observe that the performance of fastsolv and the baseline model are very similar on the Vermeire dataset, with marginal improvements in fastsolv. For example, the test RMSE decreased from 0.71 for the baseline model to 0.68 for fastsolv. However, we observe massive performance gains when extrapolating to the Boobier dataset, with RMSE decreasing from 1.67, 1.55, and 1.45 for the baseline model to 0.83, 0.92, and 0.83 for fastsolve for the acetone, benzne, and ethanol test sets, respectively. 
+We observe that the performance of fastsolv and the baseline model are very similar on the Vermeire dataset, with marginal improvements in fastsolv. For example, the test RMSE decreased from 0.71 for the baseline model to 0.68 for fastsolv. However, we observe massive performance gains when extrapolating to the Boobier dataset, with RMSE decreasing from 1.67, 1.55, and 1.45 for the baseline model to 0.83, 0.92, and 0.83 for fastsolve for the acetone, benzne, and ethanol test sets, respectively. Achieving RMSE values $< 1$ for solute extrapolation is a promising result in the context of solubility prediction, given that published models report similar RMSE values for interpolation.[@francoeur2021soltrannet;@lovric2021machine;@panapitiya2022mdm]
 
 We attribute this improved performance when extrapolating to new solute space to the ability for fastsolv to learn latent representations for the solute and solvent independently. Since solutes and solvents contribute differently solvation, allowing a model to learn different latent representations improves model performance. Additionally, the interaction operation selected by hyperparameter optimization is also informative as to which solvation physics may be closer to ground truth. The top 10 performing models (out of 32) tested during hyperparameter optimization all multiplied the latent representations of the solute and solvent to generate the solution representation. As previously suggested, multiplying these representations is analagous to a Abraham solvation model, which multiplies molecular descriptors of the solute and solvent to generate solubility predictions. While it is difficult to definitively attribute the improved performance solely to the physics-infusion of fastsolv, the increased accuracy does suggest that infusing physical intuition to model architecture is a viable route to more accurate molecular property prediction. 
 
