@@ -3,4 +3,5 @@ SolProp_v1.2*
 *highsol_training
 paper/paper.pdf
 *.pyc
-models/fastprop_custom/output
+models/fastprop_custom/output*
+checkpoints/
