@@ -163,16 +163,15 @@ RMSE              & \multicolumn{1}{c|}{0.73}       & 0.71 & \multicolumn{1}{c|}
 
 We next performed hyperparameter optimization on fastsolv, identifying the optimal hyperparameters as shown in the table below:
 
-\begin{table}[]
-\begin{tabular}{|c|c|}
-\hline
-Hidden layers          & 2    \\ \hline
-Hidden layer dimension & 3000 \\ \hline
-\end{tabular}
-\end{table}
+| Solute branch hidden layers  | 3              |
+|------------------------------|----------------|
+| Solvent branch hidden layers | 3              |
+| Branch layer dimension       | 1000           |
+| Interaction layers           | 1              |
+| Interaction layer dimension  | 400            |
+| Interaction operation        | multiplication |
 
-**Implications of the optimized architecture.
-We next evaluated the optimized fastsolv model on the Vermeire and Boobier datasets. The results are summarized in the table below. 
+The optimizied fastsolv model passes the descriptors of the solute and solvent through 3 hidden layers each, before multiplying the resulting learned representations, and passing the solution representation through another hidden layer in the interaction module. We next evaluated the optimized fastsolv model on the Vermeire and Boobier datasets. The results are summarized in the table below. 
 
 \begin{table}[]
 \begin{tabular}{|c|cc|ccc|}
@@ -185,6 +184,10 @@ RMSE              & \multicolumn{1}{c|}{0.68}       & 0.70 & \multicolumn{1}{c|}
 \% logS $\pm$ 1.0 & \multicolumn{1}{c|}{0.84}       & 0.84 & \multicolumn{1}{c|}{0.78}    & \multicolumn{1}{c|}{0.69}    & 0.76    \\ \hline
 \end{tabular}
 \end{table}
+
+We observe that the performance of fastsolv and the baseline model are very similar on the Vermeire dataset, with marginal improvements in fastsolv. For example, the test RMSE decreased from 0.71 for the baseline model to 0.68 for fastsolv. However, we observe massive performance gains when extrapolating to the Boobier dataset, with RMSE decreasing from 1.67, 1.55, and 1.45 for the baseline model to 0.83, 0.92, and 0.83 for fastsolve for the acetone, benzne, and ethanol test sets, respectively. 
+
+We attribute this improved performance when extrapolating to new solute space to the ability for fastsolv to learn latent representations for the solute and solvent independently. Since solutes and solvents contribute differently solvation, allowing a model to learn different latent representations improves model performance. Additionally, the interaction operation selected by hyperparameter optimization is also informative as to which solvation physics may be closer to ground truth. The top 10 performing models (out of 32) tested during hyperparameter optimization all multiplied the latent representations of the solute and solvent to generate the solution representation. As previously suggested, multiplying these representations is analagous to a Abraham solvation model, which multiplies molecular descriptors of the solute and solvent to generate solubility predictions. While it is difficult to definitively attribute the improved performance solely to the physics-infusion of fastsolv, the increased accuracy does suggest that infusing physical intuition to model architecture is a viable route to more accurate molecular property prediction. 
 
 
 <!-- Consider adding this section about highly soluble molecules back to the paper for submission to a journal - it could prove interesting as a comment on 'hit detection', an interesting application of these models.
