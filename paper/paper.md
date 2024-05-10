@@ -90,10 +90,10 @@ This allowed us to directly benchmark our model performance to a solubility pred
 This comparison outside of the baseline study is unorthodox but important - the Vermeire dataset is superior for training due to its incredible diversity of solvents and temperature measurements, but a fair comparison of models requires training on the same task.
 
 The Boobier dataset contains far more solutes but only benzene, acetone, and ethanol as solvents [^1].
-This dataset contains **solutes in the three organic solvents included.
-The distribution of logS labels in the Boobier dataset are also shown below. 
+This dataset contains a huge diversity in solutes: the benzene dataset contains 425 unique solutes, the acetone dataset contains 405, and the ethanol dataset contains 639. Removing the intersection between these datasets yields 1440 unique solutes in total.
+The distribution of logS labels in each solvent in the Boobier dataset are also shown below. 
 
-*make histogram of boobier dataset
+![Distribution of logS Values in Boobier et al. [@boobier2020machine]\label{boobier_label_distribution}](../figures/boobier_label_distribution.png){ width=3in }
 
 [^1]: The referenced study did not include temperatures for all measurements.
 The acetone dataset was reduced from 452 to 405, benzene from 464 to 425, and ethanol from 695 to 639 measurements.
@@ -118,7 +118,7 @@ The two separate MLPs for the solute and solvent descriptors allow for the netwo
 This is done based on our physics understanding that a given solute or solvent has similar behavior across many combinations and thus one generally applicable embedding rather than infinitely many pair-specific embeddings.
 The choice of interaction block also reflects the underlying functional form of solvation physics.
 Row-wise multiplication is analogous to the aforementioned Abraham model whereas subtraction mimics a group additivity-style approach.
-By allowing the hyperparameter optimization to choose the interaction operation, depth and height of branch and interactions MLPs, and activation function we can systematically explore most effective method of infusing physics.
+By allowing the hyperparameter optimization to choose the interaction operation, depth and height of branch and interactions MLPs, and activation function we can systematically explore most effective method of infusing physics. We refer to this model as 'fastsolv.'
 
 Data is partitioned into training, validation, and testing based on a random split of the solutes.
 This allows the model to see all solvents during training but only a subset of solutes, thus evaluating its capacity to extrapolate to unseen solute structures.
@@ -126,97 +126,67 @@ Solute extrapolation was chosen to reflect the expected application of this mode
 More often we are interested in predicting solubility for a new solute in an existing solvent than vice versa.
 
 Mean Absolute Error (MAE) and Root Mean Squared Error (RMSE) are both used as evaluation metrics accordings to their typical defintions.
-Taking after Boobier et al. we also evaluate the percentage of predictions which are within 0.7 and 1.0 log units of the true value, thresholds which were determined in their study to consitute 'useful' models.
+Taking after Boobier et al. we also evaluate the percentage of predictions which are within 0.7 and 1.0 log units of the true value, thresholds which were determined in their study to consitute 'useful' models. 
 
+**add training details: number of epochs, learning rate, early stopping/patience, optimizer (adam)
 # Results
-Story now: 
-- show results of big hyperparameter optimization. Model either chooses "naive nn magic," or physics-infused network
-- Then, evaluate model on the Boobier datasets to have a direct model comparison
-- Conclude: either physics infusion helps or doesn't
-- Also, training directly kinda gives better performance (if we showed interpolation, you can see improvement)
+We first evaluate the performance of the baseline unbranched model, which concatenates the solute and solvent descriptors and feeds them to an MLP. We used the hyperparameters summarized in the table below. 
 
-We first present the results of the hyperparameter optimization over the physics-infused fastprop model architecure. **describe optimized model and its' metrics*.  
-- implications of the optimized architecture
+\begin{table}[]
+\begin{tabular}{|c|c|}
+\hline
+Hidden layers          & 2    \\ \hline
+Hidden layer dimension & 3000 \\ \hline
+\end{tabular}
+\end{table}
 
-Then, we evaluated this model on the Boobier benezene, acetone, and ethanol datasets. *describe model performance and compare directly to the metrics in their paper* 
-Out of the box `fastprop` results:
-```
-[03/12/2024 12:56:40 PM fastprop.fastprop_core] INFO: Displaying validation results:
-                     count      mean       std       min       25%       50%       75%       max
-validation_mse_loss    4.0  0.026871  0.004248  0.020674  0.025870  0.028423  0.029424  0.029964
-validation_r2          4.0  0.972656  0.004590  0.967403  0.970829  0.972319  0.974147  0.978583
-validation_mape        4.0  0.453042  0.385711  0.210034  0.242433  0.287313  0.497922  1.027508
-validation_wmape       4.0  0.076513  0.008897  0.067193  0.070593  0.075767  0.081687  0.087323
-validation_l1          4.0  0.134489  0.020476  0.117165  0.123618  0.128406  0.139277  0.163981
-validation_mdae        4.0  0.080012  0.023635  0.066624  0.067542  0.069015  0.081485  0.115395
-validation_rmse        4.0  0.233760  0.018872  0.206196  0.229746  0.240361  0.244375  0.248122
-[03/12/2024 12:56:40 PM fastprop.fastprop_core] INFO: Displaying testing results:
-               count      mean       std       min       25%       50%       75%       max
-test_mse_loss    4.0  0.027580  0.015438  0.015501  0.019754  0.022316  0.030143  0.050187
-test_r2          4.0  0.972353  0.014206  0.951648  0.969449  0.977098  0.980003  0.983569
-test_mape        4.0  0.445411  0.243454  0.261824  0.312939  0.358724  0.491197  0.802375
-test_wmape       4.0  0.075826  0.016898  0.064619  0.067681  0.068844  0.076988  0.100996
-test_l1          4.0  0.133043  0.024908  0.114600  0.118541  0.124067  0.138569  0.169437
-test_mdae        4.0  0.077020  0.017380  0.063228  0.067340  0.071297  0.080978  0.102260
-test_rmse        4.0  0.231165  0.060701  0.178544  0.201060  0.213808  0.243913  0.318499
-[03/12/2024 12:56:40 PM fastprop.fastprop_core] INFO: 2-sided T-test between validation and testing rmse yielded p value of p=0.938>0.05.
-[03/12/2024 12:56:40 PM fastprop.cli.fastprop_cli] INFO: If you use fastprop in published work, please cite: ...WIP...
-[03/12/2024 12:56:40 PM fastprop.cli.fastprop_cli] INFO: Total elapsed time: 0:05:58.338315
-```
+The baseline model performance on all four datasets are summarized below. We observe strong extrapolation within the Vermeire dataset, with nearly identical error on the validation ($\text{RMSE} = 0.73$) and solute hold-out test set ($\text{RMSE} = 0.71$). However, when extrapolating to the solutes in the Boobier dataset, we observe much worse performance, with $\text{RMSE} = 1.67$ for solubility in acetone, $\text{RMSE} = 1.55$ for solubility in benzene, and $\text{RMSE} = 1.45$ for solubility in ethanol. This poor performance is not surprising, given that the solute diversity (1440 unique solutes) in the Boobier presents a difficult extrapolatory task. 
 
-Out of the box Chemprop results:
-```
-Moving model to cuda
-Model 0 test rmse = 0.525936                                                                                                                                                                                                                                      
-Model 0 test mae = 0.389645
-Model 0 test r2 = 0.882762
-Ensemble test rmse = 0.525936
-Ensemble test mae = 0.389645
-Ensemble test r2 = 0.882762
-1-fold cross validation
-        Seed 0 ==> test rmse = 0.525936
-        Seed 0 ==> test mae = 0.389645
-        Seed 0 ==> test r2 = 0.882762
-Overall test rmse = 0.525936 +/- 0.000000
-Overall test mae = 0.389645 +/- 0.000000
-Overall test r2 = 0.882762 +/- 0.000000
-Elapsed time = 0:04:37
-```
+*add table caption and label
+\begin{table}[]
+\begin{tabular}{|c|cc|ccc|}
+\hline
+                  & \multicolumn{2}{c|}{Vermeire}          & \multicolumn{3}{c|}{Boobier}                                          \\ \hline
+Metric            & \multicolumn{1}{c|}{Validation} & Test & \multicolumn{1}{c|}{Acetone} & \multicolumn{1}{c|}{Benzene} & Ethanol \\ \hline
+MAE               & \multicolumn{1}{c|}{0.61}       & 0.58 & \multicolumn{1}{c|}{1.53}    & \multicolumn{1}{c|}{1.40}    & 1.29    \\ \hline
+RMSE              & \multicolumn{1}{c|}{0.73}       & 0.71 & \multicolumn{1}{c|}{1.67}    & \multicolumn{1}{c|}{1.55}    & 1.45    \\ \hline
+\% logS $\pm$ 0.7 & \multicolumn{1}{c|}{0.65}       & 0.70 & \multicolumn{1}{c|}{0.24}    & \multicolumn{1}{c|}{0.27}    & 0.30    \\ \hline
+\% logS $\pm$ 1.0 & \multicolumn{1}{c|}{0.82}       & 0.82 & \multicolumn{1}{c|}{0.34}    & \multicolumn{1}{c|}{0.39}    & 0.43    \\ \hline
+\end{tabular}
+\end{table}
 
-Optimized Chemprop results:
-```Best trial, with seed 164
-{'depth': 6, 'dropout': 0.0, 'ffn_num_layers': 3, 'linked_hidden_size': 1400}
-num params: 14,513,801
-Elapsed time = 19:41:28
+We next performed hyperparameter optimization on fastsolv, identifying the optimal hyperparameters as shown in the table below:
 
-Overall test rmse = 0.373272 +/- 0.000000
-Overall test mae = 0.279181 +/- 0.000000
-Overall test r2 = 0.940946 +/- 0.000000
-Elapsed time = 0:10:31
-```
+\begin{table}[]
+\begin{tabular}{|l|l|}
+\hline
+Solute branch hidden layers  & 3              \\ \hline
+Solvent branch hidden layers & 3              \\ \hline
+Branch layer dimension       & 1000           \\ \hline
+Interaction layers           & 1              \\ \hline
+Interaction layer dimension  & 400            \\ \hline
+Interaction operation        & multiplication \\ \hline
+\end{tabular}
+\end{table}
 
-and with repetitions:
-```
-Overall test rmse = 0.373272 +/- 0.000000
-Overall test mae = 0.279181 +/- 0.000000
-Overall test r2 = 0.940946 +/- 0.000000
-Elapsed time = 0:10:42
+The optimizied fastsolv model passes the descriptors of the solute and solvent through 3 hidden layers each, before multiplying the resulting learned representations, and passing the solution representation through another hidden layer in the interaction module. We next evaluated the optimized fastsolv model on the Vermeire and Boobier datasets. The results are summarized in the table below. 
 
-Overall test rmse = 0.375874 +/- 0.000000
-Overall test mae = 0.270744 +/- 0.000000
-Overall test r2 = 0.937207 +/- 0.000000
-Elapsed time = 0:10:39
+\begin{table}[]
+\begin{tabular}{|c|cc|ccc|}
+\hline
+                  & \multicolumn{2}{c|}{Vermeire}          & \multicolumn{3}{c|}{Boobier}                                          \\ \hline
+Metric            & \multicolumn{1}{c|}{Validation} & Test & \multicolumn{1}{c|}{Acetone} & \multicolumn{1}{c|}{Benzene} & Ethanol \\ \hline
+MAE               & \multicolumn{1}{c|}{0.56}       & 0.60 & \multicolumn{1}{c|}{0.68}    & \multicolumn{1}{c|}{0.77}    & 0.69    \\ \hline
+RMSE              & \multicolumn{1}{c|}{0.68}       & 0.70 & \multicolumn{1}{c|}{0.83}    & \multicolumn{1}{c|}{0.92}    & 0.83    \\ \hline
+\% logS $\pm$ 0.7 & \multicolumn{1}{c|}{0.68}       & 0.65 & \multicolumn{1}{c|}{0.60}    & \multicolumn{1}{c|}{0.50}    & 0.55    \\ \hline
+\% logS $\pm$ 1.0 & \multicolumn{1}{c|}{0.84}       & 0.84 & \multicolumn{1}{c|}{0.78}    & \multicolumn{1}{c|}{0.69}    & 0.76    \\ \hline
+\end{tabular}
+\end{table}
 
-Overall test rmse = 0.398474 +/- 0.000000
-Overall test mae = 0.294095 +/- 0.000000
-Overall test r2 = 0.922584 +/- 0.000000
-Elapsed time = 0:10:36
+We observe that the performance of fastsolv and the baseline model are very similar on the Vermeire dataset, with marginal improvements in fastsolv. For example, the test RMSE decreased from 0.71 for the baseline model to 0.68 for fastsolv. However, we observe massive performance gains when extrapolating to the Boobier dataset, with RMSE decreasing from 1.67, 1.55, and 1.45 for the baseline model to 0.83, 0.92, and 0.83 for fastsolve for the acetone, benzne, and ethanol test sets, respectively. 
 
-Overall test rmse = 0.446716 +/- 0.000000
-Overall test mae = 0.330963 +/- 0.000000
-Overall test r2 = 0.908125 +/- 0.000000
-Elapsed time = 0:10:37
-```
+We attribute this improved performance when extrapolating to new solute space to the ability for fastsolv to learn latent representations for the solute and solvent independently. Since solutes and solvents contribute differently solvation, allowing a model to learn different latent representations improves model performance. Additionally, the interaction operation selected by hyperparameter optimization is also informative as to which solvation physics may be closer to ground truth. The top 10 performing models (out of 32) tested during hyperparameter optimization all multiplied the latent representations of the solute and solvent to generate the solution representation. As previously suggested, multiplying these representations is analagous to a Abraham solvation model, which multiplies molecular descriptors of the solute and solvent to generate solubility predictions. While it is difficult to definitively attribute the improved performance solely to the physics-infusion of fastsolv, the increased accuracy does suggest that infusing physical intuition to model architecture is a viable route to more accurate molecular property prediction. 
+
 
 <!-- Consider adding this section about highly soluble molecules back to the paper for submission to a journal - it could prove interesting as a comment on 'hit detection', an interesting application of these models.
 
@@ -276,15 +246,13 @@ Elapsed time = 0:00:49
 -->
 
 # Conclusion
-
+Here, we explored descriptor-based models for molecular property prediciton of temperature-dependent solid solubulity, using Mordred descriptors as inputs to the model. We developed a physics-infused architecture, which learns latent representations of the solvent and solute molecular independently, then multiplies these learned representations to give a solution representation, which is passed through an MLP and reads out solubility. We compared the performance of a baseline descriptor model to the physics-infused model, fastsolv, on the solubility datasets compiled by Vermiere and Boobier. Both models interpolated and extrapolated into new solutes within the Vermiere dataset similarly well, but fastsolv dramatically improved extrapolation into the fast solute space of Boobier much more effectively. For a realistic drug discovery application, predicting solubility of an arbitrary solute is crucial. The ability of fastsolv to extrapolate to new solutes presents utility in such applications. Overall, this work presents the value of providing machine learning models with physical inductive bias in molecular machine learning tasks. 
 
 <!-- These two sections can be removed after submitting the class report - they are likely not needed for a journal submission. -->
 # Contributions
-
+Burns and Attia both contributed to ideation, code development, and writing. 
 # Code
 Code is available via GitHub
-
-# Results and Discussion
 
 <!-- These sections should be added back for the eventual paper submission.
 # Declarations
