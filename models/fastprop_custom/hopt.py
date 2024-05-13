@@ -7,11 +7,11 @@ import psutil
 import ray
 import torch
 from fastprop.defaults import _init_loggers, init_logger
+from fastprop.model import fastprop
 from lightning.pytorch import seed_everything
 from ray import tune
 from ray.train.torch import enable_reproducibility
 from ray.tune.search.optuna import OptunaSearch
-from fastprop.model import fastprop
 
 from run_one import run_one
 
@@ -25,7 +25,7 @@ def define_by_run_func(trial):
     trial.suggest_categorical("act_fun", ("relu", "relu6", "sigmoid", "leakyrelu", "relun"))
     trial.suggest_int("interaction_hidden_size", 400, 3_200, 200)
     trial.suggest_int("num_interaction_layers", 0, 5, 1)
-    interaction = trial.suggest_categorical("interaction", ("concatenation", "pairwisemax", "multiplication", "subtraction"))
+    interaction = trial.suggest_categorical("interaction", ("concatenation", "multiplication", "subtraction"))  # "pairwisemax",
 
     if ENABLE_BRANCHES:
         # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation or pairwisemax

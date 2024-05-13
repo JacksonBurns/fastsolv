@@ -1,25 +1,24 @@
 import glob
 import logging
 import os
-from pathlib import Path
 from functools import partial
+from pathlib import Path
 
+import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 from astartes import train_val_test_split
-from torchmetrics.functional.regression import r2_score as tm_r2_score
 from fastprop.data import fastpropDataLoader, standard_scale
 from fastprop.defaults import _init_loggers, init_logger
+from fastprop.metrics import SCORE_LOOKUP, mean_absolute_error_score, root_mean_squared_error_loss, weighted_mean_absolute_percentage_error_score
 from fastprop.model import train_and_test
-from fastprop.metrics import SCORE_LOOKUP, root_mean_squared_error_loss, mean_absolute_error_score, weighted_mean_absolute_percentage_error_score
 from lightning.pytorch import seed_everything
 from pytorch_lightning import Trainer
 from sklearn.preprocessing import QuantileTransformer
+from torchmetrics.functional.regression import r2_score as tm_r2_score
 
 from data import SolubilityDataset
 from model import fastpropSolubility
-
-import matplotlib.pyplot as plt
 
 logger = init_logger(__name__)
 
@@ -69,9 +68,9 @@ def r2_score(truth: torch.Tensor, prediction: torch.Tensor, ignored: None, multi
         plt.ylabel("prediction")
         plt.ylim((-10, 2))
         plt.xlim((-10, 2))
-        plt.plot([-10, 2], [-10, 2], color='black', linestyle='-')
-        plt.plot([-10, 2], [-9, 3], color='red', linestyle='--', alpha=0.25)
-        plt.plot([-10, 2], [-11, 1], color='red', linestyle='--', alpha=0.25)
+        plt.plot([-10, 2], [-10, 2], color="black", linestyle="-")
+        plt.plot([-10, 2], [-9, 3], color="red", linestyle="--", alpha=0.25)
+        plt.plot([-10, 2], [-11, 1], color="red", linestyle="--", alpha=0.25)
         plt.show()
     return tm_r2_score(prediction.squeeze(), truth.squeeze())
 
@@ -299,14 +298,14 @@ def run_one(data=None, run_holdout=False, **model_kwargs):
 if __name__ == "__main__":
     run_one(
         run_holdout=True,
-        num_solute_layers=3,
-        solute_hidden_size=1_800,
-        num_solvent_layers=3,
-        solvent_hidden_size=1_800,
-        num_interaction_layers=1,
-        interaction_hidden_size=1_400,
-        interaction_operation="multiplication",
-        activation_fxn="relu",
+        num_solute_layers=5,
+        solute_hidden_size=1_600,
+        num_solvent_layers=5,
+        solvent_hidden_size=1_600,
+        num_interaction_layers=2,
+        interaction_hidden_size=1_800,
+        interaction_operation="subtraction",
+        activation_fxn="leakyrelu",
         num_features=1613,
         learning_rate=0.001,
     )
