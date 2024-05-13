@@ -5,7 +5,9 @@ from functools import partial
 from pathlib import Path
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
+import shutil
 import torch
 from astartes import train_val_test_split
 from fastprop.data import fastpropDataLoader, standard_scale
@@ -25,7 +27,9 @@ logger = init_logger(__name__)
 
 NUM_REPLICATES = 4
 SCALE_TARGETS = True
-SHOW_PLOTS = False
+SHOW_PLOTS = True
+SOLUTE_EXTRAPOLATION = False
+RANDOM_SEED = 1701  # the final frontier
 
 
 def impute_missing(data: torch.Tensor, means: torch.Tensor = None):
@@ -85,12 +89,12 @@ SCORE_LOOKUP["regression"] = (
 )
 
 
-def run_one(data=None, run_holdout=False, **model_kwargs):
+def run_one(data=None, remove_output=False, run_holdout=False, **model_kwargs):
     # setup logging and output directories
     os.makedirs("output", exist_ok=True)
     _init_loggers("output")
     logging.getLogger("pytorch_lightning").setLevel(logging.INFO)
-    seed_everything(42)
+    seed_everything(RANDOM_SEED)
 
     # load the training data
     if data is None:
@@ -128,20 +132,31 @@ def run_one(data=None, run_holdout=False, **model_kwargs):
         llompart_solute_features = torch.tensor(df.iloc[:, 4 : (4 + 1_613)].to_numpy(), dtype=torch.float32)
         llompart_solvent_features = torch.tensor(df.iloc[:, (4 + 1_613) :].to_numpy(), dtype=torch.float32)
 
+        # load the other other holdout data
+        df = pd.read_csv(Path("holdout_set_3/bigsol_features.csv"), index_col=0)
+        bigsol_solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+        bigsol_temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+        bigsol_solute_features = torch.tensor(df.iloc[:, 4 : (4 + 1_613)].to_numpy(), dtype=torch.float32)
+        bigsol_solvent_features = torch.tensor(df.iloc[:, (4 + 1_613) :].to_numpy(), dtype=torch.float32)
+
         acetone_results, benzene_results, ethanol_results = [], [], []
         llompart_results = []
+        bigsol_results = []
 
     logger.info("Run 'tensorboard --logdir output/tensorboard_logs' to track training progress.")
-    random_seed = 42
+    random_seed = RANDOM_SEED
     all_test_results, all_validation_results = [], []
     for replicate_number in range(NUM_REPLICATES):
         logger.info(f"Training model {replicate_number+1} of {NUM_REPLICATES} ({random_seed=})")
 
         # split the data s.t. model only sees a subset of solutes and solvents
-        solutes_train, solutes_val, solutes_test = train_val_test_split(pd.unique(smiles_df["solute_smiles"]), random_state=random_seed)
-        train_indexes = smiles_df.index[smiles_df["solute_smiles"].isin(solutes_train)].tolist()
-        val_indexes = smiles_df.index[smiles_df["solute_smiles"].isin(solutes_val)].tolist()
-        test_indexes = smiles_df.index[smiles_df["solute_smiles"].isin(solutes_test)].tolist()
+        if SOLUTE_EXTRAPOLATION:
+            solutes_train, solutes_val, solutes_test = train_val_test_split(pd.unique(smiles_df["solute_smiles"]), random_state=random_seed)
+            train_indexes = smiles_df.index[smiles_df["solute_smiles"].isin(solutes_train)].tolist()
+            val_indexes = smiles_df.index[smiles_df["solute_smiles"].isin(solutes_val)].tolist()
+            test_indexes = smiles_df.index[smiles_df["solute_smiles"].isin(solutes_test)].tolist()
+        else:
+            train_indexes, val_indexes, test_indexes = train_val_test_split(np.arange(len(smiles_df)), random_state=random_seed)
 
         # scaling
         solute_features[train_indexes], solute_feature_means, solute_feature_vars = standard_scale(solute_features[train_indexes])
@@ -153,6 +168,7 @@ def run_one(data=None, run_holdout=False, **model_kwargs):
             benzene_solute_features = solute_scaler(benzene_solute_features)
             ethanol_solute_features = solute_scaler(ethanol_solute_features)
             llompart_solute_features = solute_scaler(llompart_solute_features)
+            bigsol_solute_features = solute_scaler(bigsol_solute_features)
 
         solvent_features[train_indexes], solvent_feature_means, solvent_feature_vars = standard_scale(solvent_features[train_indexes])
         solvent_scaler = partial(standard_scale, means=solvent_feature_means, variances=solute_feature_vars)
@@ -163,6 +179,7 @@ def run_one(data=None, run_holdout=False, **model_kwargs):
             benzene_solvent_features = solvent_scaler(benzene_solvent_features)
             ethanol_solvent_features = solvent_scaler(ethanol_solvent_features)
             llompart_solvent_features = solvent_scaler(llompart_solvent_features)
+            bigsol_solvent_features = solvent_scaler(bigsol_solvent_features)
 
         temperatures[train_indexes], temperature_means, temperature_vars = standard_scale(temperatures[train_indexes])
         temperature_scaler = partial(standard_scale, means=temperature_means, variances=temperature_vars)
@@ -173,6 +190,7 @@ def run_one(data=None, run_holdout=False, **model_kwargs):
             benzene_temperatures = temperature_scaler(benzene_temperatures)
             ethanol_temperatures = temperature_scaler(ethanol_temperatures)
             llompart_temperatures = temperature_scaler(llompart_temperatures)
+            bigsol_temperatures = temperature_scaler(bigsol_temperatures)
 
         solubility_means = solubility_vars = None
         if SCALE_TARGETS:
@@ -185,6 +203,7 @@ def run_one(data=None, run_holdout=False, **model_kwargs):
                 benzene_solubilities = target_scaler(benzene_solubilities)
                 ethanol_solubilities = target_scaler(ethanol_solubilities)
                 llompart_solubilities = target_scaler(llompart_solubilities)
+                bigsol_solubilities = target_scaler(bigsol_solubilities)
 
         train_dataloader = fastpropDataLoader(
             SolubilityDataset(
@@ -249,6 +268,15 @@ def run_one(data=None, run_holdout=False, **model_kwargs):
                 ),
                 batch_size=10_000,
             )
+            bigsol_dataloader = fastpropDataLoader(
+                SolubilityDataset(
+                    bigsol_solute_features,
+                    bigsol_solvent_features,
+                    bigsol_temperatures,
+                    bigsol_solubilities,
+                ),
+                batch_size=10_000,
+            )
 
         # initialize the model and train/test
         model = fastpropSolubility(
@@ -257,7 +285,7 @@ def run_one(data=None, run_holdout=False, **model_kwargs):
             target_vars=solubility_vars,
         )
         logger.info("Model architecture:\n{%s}", str(model))
-        test_results, validation_results = train_and_test("output", model, train_dataloader, val_dataloader, test_dataloader, 50, 10)
+        test_results, validation_results = train_and_test("output", model, train_dataloader, val_dataloader, test_dataloader, 100, 10)
         all_test_results.append(test_results[0])
         all_validation_results.append(validation_results[0])
 
@@ -274,6 +302,8 @@ def run_one(data=None, run_holdout=False, **model_kwargs):
             ethanol_results.append(result[0])
             result = trainer.test(model, llompart_dataloader, verbose=False)
             llompart_results.append(result[0])
+            result = trainer.test(model, bigsol_dataloader, verbose=False)
+            bigsol_results.append(result[0])
 
         random_seed += 1
         # ensure that the model is re-instantiated
@@ -292,12 +322,17 @@ def run_one(data=None, run_holdout=False, **model_kwargs):
         logger.info("Displaying ethanol holdout set results:\n%s", holdout_results_df.describe().transpose().to_string())
         holdout_results_df = pd.DataFrame.from_records(llompart_results)
         logger.info("Displaying llompart holdout set results:\n%s", holdout_results_df.describe().transpose().to_string())
+        holdout_results_df = pd.DataFrame.from_records(bigsol_results)
+        logger.info("Displaying BigSolDB holdout set results:\n%s", holdout_results_df.describe().transpose().to_string())
+    if remove_output:
+        shutil.rmtree("output")
     return validation_results_df, test_results_df
 
 
 if __name__ == "__main__":
     run_one(
         run_holdout=True,
+        remove_output=False,
         num_solute_layers=5,
         solute_hidden_size=1_600,
         num_solvent_layers=5,

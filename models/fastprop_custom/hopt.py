@@ -8,32 +8,31 @@ import ray
 import torch
 from fastprop.defaults import _init_loggers, init_logger
 from fastprop.model import fastprop
-from lightning.pytorch import seed_everything
 from ray import tune
 from ray.train.torch import enable_reproducibility
 from ray.tune.search.optuna import OptunaSearch
 
-from run_one import run_one
+from run_one import run_one, RANDOM_SEED
 
 logger = init_logger(__name__)
 
-NUM_HOPT_TRIALS = 128
+NUM_HOPT_TRIALS = 512
 ENABLE_BRANCHES = True
 
 
 def define_by_run_func(trial):
     trial.suggest_categorical("act_fun", ("relu", "relu6", "sigmoid", "leakyrelu", "relun"))
-    trial.suggest_int("interaction_hidden_size", 400, 3_200, 200)
-    trial.suggest_int("num_interaction_layers", 0, 5, 1)
+    trial.suggest_int("interaction_hidden_size", 400, 3_400, 100)
+    trial.suggest_int("num_interaction_layers", 0, 6, 1)
     interaction = trial.suggest_categorical("interaction", ("concatenation", "multiplication", "subtraction"))  # "pairwisemax",
 
     if ENABLE_BRANCHES:
         # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation or pairwisemax
         if interaction in {"concatenation", "pairwisemax"}:
-            trial.suggest_int("solute_layers", 0, 5, 1)
-            trial.suggest_int("solute_hidden_size", 200, 2_200, 200)
-            trial.suggest_int("solvent_layers", 0, 5, 1)
-            trial.suggest_int("solvent_hidden_size", 200, 2_200, 200)
+            trial.suggest_int("solute_layers", 0, 6, 1)
+            trial.suggest_int("solute_hidden_size", 200, 2_200, 100)
+            trial.suggest_int("solvent_layers", 0, 6, 1)
+            trial.suggest_int("solvent_hidden_size", 200, 2_200, 100)
         else:
             solute_layers = trial.suggest_int("solute_layers", 0, 5, 1)
             if solute_layers == 0:
@@ -41,8 +40,8 @@ def define_by_run_func(trial):
                 trial.suggest_int("solute_hidden_size", 0, 0)
                 trial.suggest_int("solvent_hidden_size", 0, 0)
             else:
-                trial.suggest_int("solvent_layers", 1, 5, 1)
-                matched_hidden_size = trial.suggest_int("solute_hidden_size", 200, 2_200, 200)
+                trial.suggest_int("solvent_layers", 1, 6, 1)
+                matched_hidden_size = trial.suggest_int("solute_hidden_size", 200, 2_200, 100)
                 trial.suggest_int("solvent_hidden_size", matched_hidden_size, matched_hidden_size)
     else:
         return {"solute_layers": 0, "solute_hidden_size": 0, "solvent_layers": 0, "solvent_hidden_size": 0}
@@ -53,7 +52,6 @@ def main():
     os.makedirs("output", exist_ok=True)
     _init_loggers("output")
     logging.getLogger("pytorch_lightning").setLevel(logging.INFO)
-    seed_everything(42)
 
     # load the data
     df = pd.read_csv("prepared_data.csv", index_col=0)
@@ -111,10 +109,11 @@ def _hopt_objective(
     solute_features = ray.get(solute_features_ref)
     solvent_features = ray.get(solvent_features_ref)
     smiles_df = ray.get(smiles_df_ref)
-    random_seed = 42
+    random_seed = RANDOM_SEED
     enable_reproducibility(random_seed)
     validation_results_df, _ = run_one(
         data=(solute_features, solvent_features, temperatures, solubilities, smiles_df),
+        remove_output=True,
         run_holdout=False,
         num_solute_layers=trial["solute_layers"],
         solute_hidden_size=trial["solute_hidden_size"],
