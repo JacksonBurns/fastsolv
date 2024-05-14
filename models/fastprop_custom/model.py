@@ -7,11 +7,12 @@ batches are organized (solute, solvent, temperature)
 from typing import Literal
 
 import torch
+from fastprop.data import inverse_standard_scale, standard_scale
 from fastprop.model import fastprop as _fastprop
 
 ENABLE_SNN = False
-ENABLE_DROPOUT = False
-ENABLE_BATCHNORM = False
+ENABLE_DROPOUT = True
+ENABLE_BATCHNORM = True
 ENABLE_INPUT_SIGMOID = True
 
 
@@ -88,9 +89,15 @@ class fastpropSolubility(_fastprop):
         interaction_operation: Literal["concatenation", "multiplication", "subtraction", "pairwisemax"] = "concatenation",
         activation_fxn: Literal["relu", "relu6", "sigmoid", "leakyrelu", "relun"] = "relu6",
         num_features: int = 1613,
-        learning_rate: float = 0.001,
+        learning_rate: float = 0.0001,
         target_means: torch.Tensor = None,
         target_vars: torch.Tensor = None,
+        solute_means: torch.Tensor = None,
+        solute_vars: torch.Tensor = None,
+        solvent_means: torch.Tensor = None,
+        solvent_vars: torch.Tensor = None,
+        temperature_means: torch.Tensor = None,
+        temperature_vars: torch.Tensor = None,
     ):
         super().__init__(
             input_size=num_features,
@@ -106,6 +113,14 @@ class fastpropSolubility(_fastprop):
         )
         del self.fnn
         del self.readout
+
+        # for later predicting
+        self.register_buffer("solute_means", solute_means)
+        self.register_buffer("solute_vars", solute_vars)
+        self.register_buffer("solvent_means", solvent_means)
+        self.register_buffer("solvent_vars", solvent_vars)
+        self.register_buffer("temperature_means", temperature_means)
+        self.register_buffer("temperature_vars", temperature_vars)
 
         # solute - temperature is concatenated to the input features
         solute_modules = _build_mlp(num_features + 1, solute_hidden_size, activation_fxn, num_solute_layers)
@@ -144,7 +159,7 @@ class fastpropSolubility(_fastprop):
                 interaction_modules.append(Subtraction())
             else:
                 raise TypeError(f"Unknown interaction operation '{interaction_operation}'!")
-        interaction_modules += _build_mlp(num_interaction_features, interaction_hidden_size+1, activation_fxn, num_interaction_layers)
+        interaction_modules += _build_mlp(num_interaction_features, interaction_hidden_size + 1, activation_fxn, num_interaction_layers)
         self.interaction_module = torch.nn.Sequential(*interaction_modules)
 
         # readout
@@ -158,6 +173,43 @@ class fastpropSolubility(_fastprop):
         output = self.interaction_module((solute_representation, solvent_representation, temperature))
         y_hat = self.readout(output)
         return y_hat
+
+    def predict_step(self, batch):
+        err_msg = ""
+        for stat_obj, stat_name in zip(
+            (
+                self.solute_means,
+                self.solute_vars,
+                self.solvent_means,
+                self.solvent_vars,
+                self.temperature_means,
+                self.temperature_vars,
+                self.target_means,
+                self.target_vars,
+            ),
+            (
+                "solute_means",
+                "solute_vars",
+                "solvent_means",
+                "solvent_vars",
+                "temperature_means",
+                "temperature_vars",
+                "target_means",
+                "target_vars",
+            ),
+        ):
+            if stat_obj is None:
+                err_msg.append(f"{stat_name} is None!\n")
+        if err_msg:
+            raise RuntimeError("Missing scaler statistics!\n" + err_msg)
+
+        solute_features, solvent_features, temperature = batch[0]  # batch 1 is solubility
+        solute_features = standard_scale(solute_features, self.solute_means, self.solute_vars)
+        solvent_features = standard_scale(solvent_features, self.solvent_means, self.solvent_vars)
+        temperature = standard_scale(temperature, self.temperature_means, self.temperature_vars)
+        with torch.inference_mode():
+            logits = self.forward((solute_features, solvent_features, temperature))
+        return inverse_standard_scale(logits, self.target_means, self.target_vars)
 
 
 if __name__ == "__main__":

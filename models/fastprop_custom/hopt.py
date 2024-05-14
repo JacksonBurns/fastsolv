@@ -12,7 +12,7 @@ from ray import tune
 from ray.train.torch import enable_reproducibility
 from ray.tune.search.optuna import OptunaSearch
 
-from run_one import run_one, RANDOM_SEED
+from train import RANDOM_SEED, SOLUTE_COLUMNS, SOLVENT_COLUMNS, train_ensemble
 
 logger = init_logger(__name__)
 
@@ -56,10 +56,10 @@ def main():
     # load the data
     df = pd.read_csv("prepared_data.csv", index_col=0)
     smiles_df = df[["solute_smiles", "solvent_smiles"]]
-    solubilities = torch.tensor(df.iloc[:, 2].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
-    temperatures = torch.tensor(df.iloc[:, 3].to_numpy(), dtype=torch.float32).unsqueeze(-1)
-    solute_features = torch.tensor(df.iloc[:, 4 : (4 + 1_613)].to_numpy(), dtype=torch.float32)
-    solvent_features = torch.tensor(df.iloc[:, (4 + 1_613) :].to_numpy(), dtype=torch.float32)
+    solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
+    temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+    solute_features = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
+    solvent_features = torch.tensor(df[SOLVENT_COLUMNS].to_numpy(), dtype=torch.float32)
 
     logger.info("Run 'tensorboard --logdir output/tensorboard_logs' to track training progress.")
     metric = fastprop.get_metric("regression")
@@ -111,7 +111,7 @@ def _hopt_objective(
     smiles_df = ray.get(smiles_df_ref)
     random_seed = RANDOM_SEED
     enable_reproducibility(random_seed)
-    validation_results_df, _ = run_one(
+    validation_results_df, _ = train_ensemble(
         data=(solute_features, solvent_features, temperatures, solubilities, smiles_df),
         remove_output=True,
         run_holdout=False,
@@ -124,7 +124,7 @@ def _hopt_objective(
         interaction_operation=trial["interaction"],
         activation_fxn=trial["act_fun"],
         num_features=1_613,
-        learning_rate=0.001,
+        learning_rate=0.0001,
     )
     return {"mse": validation_results_df.describe().at["mean", "validation_mse_scaled_loss"]}
 
