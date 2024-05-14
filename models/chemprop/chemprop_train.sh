@@ -2,10 +2,10 @@
 # trains a comparison model against fastprop
 
 # chemprop_hyperopt \
-# --data_path targets.csv \
+# --data_path ../../data/vermeire/targets.csv \
 # --smiles_columns solvent_smiles solute_smiles \
 # --number_of_molecules 2 \
-# --features_path chemprop_features.csv \
+# --features_path ../../data/vermeire/chemprop_features.csv \
 # --target_columns logS \
 # --dataset_type regression \
 # --save_dir chemprop_highsol_training \
@@ -24,10 +24,10 @@ REPETITION=0
 while [ $REPETITION -le 3 ];
 do
     chemprop_train \
-    --data_path targets.csv \
+    --data_path ../../data/vermeire/targets.csv \
     --smiles_columns solvent_smiles solute_smiles \
     --number_of_molecules 2 \
-    --features_path chemprop_features.csv \
+    --features_path ../../data/vermeire/chemprop_features.csv \
     --target_columns logS \
     --dataset_type regression \
     --save_dir chemprop_optimal_R${REPETITION}_highsol_training \

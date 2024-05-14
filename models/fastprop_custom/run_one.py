@@ -12,6 +12,7 @@ import torch
 from astartes import train_val_test_split
 from fastprop.data import fastpropDataLoader, standard_scale
 from fastprop.defaults import _init_loggers, init_logger
+from fastprop.defaults import ALL_2D
 from fastprop.metrics import SCORE_LOOKUP, mean_absolute_error_score, root_mean_squared_error_loss, weighted_mean_absolute_percentage_error_score
 from fastprop.model import train_and_test
 from lightning.pytorch import seed_everything
@@ -25,11 +26,14 @@ from model import fastpropSolubility
 logger = init_logger(__name__)
 
 
-NUM_REPLICATES = 4
+NUM_REPLICATES = 1
 SCALE_TARGETS = True
 SHOW_PLOTS = True
-SOLUTE_EXTRAPOLATION = False
+SOLUTE_EXTRAPOLATION = True
 RANDOM_SEED = 1701  # the final frontier
+
+SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
+SOLVENT_SOLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
 
 
 def impute_missing(data: torch.Tensor, means: torch.Tensor = None):
@@ -95,49 +99,49 @@ def run_one(data=None, remove_output=False, run_holdout=False, **model_kwargs):
     _init_loggers("output")
     logging.getLogger("pytorch_lightning").setLevel(logging.INFO)
     seed_everything(RANDOM_SEED)
-
+    _data_dir = Path("../../data")
     # load the training data
     if data is None:
-        df = pd.read_csv("prepared_data.csv", index_col=0)
+        df = pd.read_csv(_data_dir / Path("vermeire/prepared_data.csv"), index_col=0)
         smiles_df = df[["solute_smiles", "solvent_smiles"]]
-        solubilities = torch.tensor(df.iloc[:, 2].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
-        temperatures = torch.tensor(df.iloc[:, 3].to_numpy(), dtype=torch.float32).unsqueeze(-1)
-        solute_features = torch.tensor(df.iloc[:, 4 : (4 + 1_613)].to_numpy(), dtype=torch.float32)
-        solvent_features = torch.tensor(df.iloc[:, (4 + 1_613) :].to_numpy(), dtype=torch.float32)
+        solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
+        temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+        solute_features = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
+        solvent_features = torch.tensor(df[SOLVENT_SOLUMNS].to_numpy(), dtype=torch.float32)
     else:
         solute_features, solvent_features, temperatures, solubilities, smiles_df = data
 
     if run_holdout:
         # load the holdout data
-        df = pd.read_csv(Path("holdout_set/acetone_solubility_data_features.csv"), index_col=0)
-        acetone_solubilities = torch.tensor(df.iloc[:, 3].to_numpy(), dtype=torch.float32).unsqueeze(-1)
-        acetone_temperatures = torch.tensor(df.iloc[:, 2].to_numpy(), dtype=torch.float32).unsqueeze(-1)
-        acetone_solute_features = torch.tensor(df.iloc[:, 4 : (4 + 1_613)].to_numpy(), dtype=torch.float32)
-        acetone_solvent_features = torch.tensor(df.iloc[:, (4 + 1_613) :].to_numpy(), dtype=torch.float32)
-        df = pd.read_csv(Path("holdout_set/benzene_solubility_data_features.csv"), index_col=0)
-        benzene_solubilities = torch.tensor(df.iloc[:, 3].to_numpy(), dtype=torch.float32).unsqueeze(-1)
-        benzene_temperatures = torch.tensor(df.iloc[:, 2].to_numpy(), dtype=torch.float32).unsqueeze(-1)
-        benzene_solute_features = torch.tensor(df.iloc[:, 4 : (4 + 1_613)].to_numpy(), dtype=torch.float32)
-        benzene_solvent_features = torch.tensor(df.iloc[:, (4 + 1_613) :].to_numpy(), dtype=torch.float32)
-        df = pd.read_csv(Path("holdout_set/ethanol_solubility_data_features.csv"), index_col=0)
-        ethanol_solubilities = torch.tensor(df.iloc[:, 3].to_numpy(), dtype=torch.float32).unsqueeze(-1)
-        ethanol_temperatures = torch.tensor(df.iloc[:, 2].to_numpy(), dtype=torch.float32).unsqueeze(-1)
-        ethanol_solute_features = torch.tensor(df.iloc[:, 4 : (4 + 1_613)].to_numpy(), dtype=torch.float32)
-        ethanol_solvent_features = torch.tensor(df.iloc[:, (4 + 1_613) :].to_numpy(), dtype=torch.float32)
+        df = pd.read_csv(_data_dir / Path("boobier/acetone_solubility_data_features.csv"), index_col=0)
+        acetone_solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+        acetone_temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+        acetone_solute_features = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
+        acetone_solvent_features = torch.tensor(df[SOLVENT_SOLUMNS].to_numpy(), dtype=torch.float32)
+        df = pd.read_csv(_data_dir / Path("boobier/benzene_solubility_data_features.csv"), index_col=0)
+        benzene_solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+        benzene_temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+        benzene_solute_features = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
+        benzene_solvent_features = torch.tensor(df[SOLVENT_SOLUMNS].to_numpy(), dtype=torch.float32)
+        df = pd.read_csv(_data_dir / Path("boobier/ethanol_solubility_data_features.csv"), index_col=0)
+        ethanol_solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+        ethanol_temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+        ethanol_solute_features = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
+        ethanol_solvent_features = torch.tensor(df[SOLVENT_SOLUMNS].to_numpy(), dtype=torch.float32)
 
         # load the other holdout data
-        df = pd.read_csv(Path("holdout_set_2/llompart_features.csv"), index_col=0)
-        llompart_solubilities = torch.tensor(df.iloc[:, 3].to_numpy(), dtype=torch.float32).unsqueeze(-1)
-        llompart_temperatures = torch.tensor(df.iloc[:, 0].to_numpy(), dtype=torch.float32).unsqueeze(-1)
-        llompart_solute_features = torch.tensor(df.iloc[:, 4 : (4 + 1_613)].to_numpy(), dtype=torch.float32)
-        llompart_solvent_features = torch.tensor(df.iloc[:, (4 + 1_613) :].to_numpy(), dtype=torch.float32)
+        df = pd.read_csv(_data_dir / Path("llompart/llompart_features.csv"), index_col=0)
+        llompart_solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+        llompart_temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+        llompart_solute_features = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
+        llompart_solvent_features = torch.tensor(df[SOLVENT_SOLUMNS].to_numpy(), dtype=torch.float32)
 
         # load the other other holdout data
-        df = pd.read_csv(Path("holdout_set_3/bigsol_features.csv"), index_col=0)
+        df = pd.read_csv(_data_dir / Path("krasnov/bigsol_features.csv"), index_col=0)
         bigsol_solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
         bigsol_temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
-        bigsol_solute_features = torch.tensor(df.iloc[:, 4 : (4 + 1_613)].to_numpy(), dtype=torch.float32)
-        bigsol_solvent_features = torch.tensor(df.iloc[:, (4 + 1_613) :].to_numpy(), dtype=torch.float32)
+        bigsol_solute_features = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
+        bigsol_solvent_features = torch.tensor(df[SOLVENT_SOLUMNS].to_numpy(), dtype=torch.float32)
 
         acetone_results, benzene_results, ethanol_results = [], [], []
         llompart_results = []
