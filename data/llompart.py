@@ -41,6 +41,7 @@ if DROP_OVERLAP:
 llompart_data.insert(0, "temperature", 273.15 + 25)
 llompart_data.insert(0, "solvent_smiles", "O")
 llompart_data = llompart_data.rename(columns={"LogS": "logS", "T": "temperature", "SMILES": "solute_smiles"})
+llompart_data = llompart_data.reset_index()
 
 fastprop_data = get_descs(llompart_data)
 

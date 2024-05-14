@@ -52,6 +52,7 @@ def test_ensemble(checkpoint_dir: Path):
             Path("boobier/ethanol_solubility_data_features.csv"),
             Path("llompart/llompart_features.csv"),
             Path("krasnov/bigsol_features.csv"),
+            Path("vermeire/prepared_data.csv"),
         ),
         (
             "boobier_acetone",
@@ -59,6 +60,7 @@ def test_ensemble(checkpoint_dir: Path):
             "boobier_ethanol",
             "llompart",
             "krasnov",
+            "vermeire",
         ),
     ):
         # load the holdout data
@@ -105,4 +107,4 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
-    test_ensemble(Path("output/fastprop_1715714236/checkpoints"))
+    test_ensemble(Path("output/fastprop_1715716155/checkpoints"))

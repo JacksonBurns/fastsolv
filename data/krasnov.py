@@ -2,7 +2,7 @@
 #
 # Usage: python krasnov.py
 #
-# Requires: pandas, numpy, fastprop, rdkit
+# Requires: pandas, numpy, fastprop, rdkit, thermo
 #
 # Calculate molecular features needed for fastprop modeling
 #
@@ -10,11 +10,13 @@
 # https://zenodo.org/records/6984601
 #
 # Running this will then csv files for fastprop predicting.
+from math import log10
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 from rdkit import Chem
+from thermo.chemical import Chemical
 
 from utils import get_descs
 
@@ -32,10 +34,43 @@ if DROP_OVERLAP:
     overlapped_smiles = tuple(vermeire_smiles.intersection(bigsol_smiles))
     bigsol_data = bigsol_data[~bigsol_data["SMILES"].isin(overlapped_smiles)]
     print(len(bigsol_data), "<--- number of molecules after dropping solutes in our training dataset")
+
+
+# convert the mol fraction to concentration
+def _fraction_to_molarity(row):
+    name = row['Solvent']
+    if name == 'THF':
+        name = "tetrahydrofuran"
+    elif name == 'n-heptane':
+        name = "heptane"
+    elif name == "DMS":
+        name = "methylthiomethane"
+    elif name == "2-ethyl-n-hexanol":
+        name = "2-Ethyl hexanol"
+    elif name == "3,6-dioxa-1-decanol":
+        name = "butoxyethoxyethanol"
+    elif name == "DEF":
+        name = "diethylformamide"
+    try:
+        m = Chemical(name, T=row["T,K"])
+    except ValueError:
+        print(f"Could not find chemical name {name}.")
+        return pd.NA
+    try:
+        return log10(row["Solubility"] / (m.MW/m.rho))
+    except TypeError as e:
+        print(name, "could not be estimated.")
+        print(str(e))
+        return pd.NA
+
+
+bigsol_data.insert(1, "logS", bigsol_data[["T,K", "Solvent", "Solubility"]].apply(_fraction_to_molarity, axis=1))
+bigsol_data = bigsol_data.dropna()
+print(len(bigsol_data), "<-- size without un-estimable solvents")
 bigsol_data = bigsol_data[["SMILES", "SMILES_Solvent", "Solubility", "T,K"]].rename(
     columns={"Solubility": "logS", "T,K": "temperature", "SMILES": "solute_smiles", "SMILES_Solvent": "solvent_smiles"}
 )
-bigsol_data["logS"] = bigsol_data["logS"].apply(np.log10)
+bigsol_data = bigsol_data.reset_index()
 
 fastprop_data = get_descs(bigsol_data)
 

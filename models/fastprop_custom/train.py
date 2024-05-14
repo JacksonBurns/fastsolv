@@ -12,49 +12,30 @@ import torch
 from astartes import train_val_test_split
 from fastprop.data import fastpropDataLoader, standard_scale
 from fastprop.defaults import ALL_2D, _init_loggers, init_logger
-from fastprop.metrics import SCORE_LOOKUP, mean_absolute_error_score, root_mean_squared_error_loss, weighted_mean_absolute_percentage_error_score
+from fastprop.metrics import SCORE_LOOKUP, mean_absolute_error_score, root_mean_squared_error_loss, weighted_mean_absolute_percentage_error_score, r2_score
 from fastprop.model import train_and_test
 from lightning.pytorch import seed_everything
-from sklearn.preprocessing import QuantileTransformer
 
 from data import SolubilityDataset
 from model import fastpropSolubility
 
 logger = init_logger(__name__)
 
-
 NUM_REPLICATES = 4
 SCALE_TARGETS = True
 SOLUTE_EXTRAPOLATION = True
 RANDOM_SEED = 1701  # the final frontier
+TRAINING_FPATH = Path("krasnov/bigsol_features.csv")
+# one of:
+# Path("boobier/acetone_solubility_data_features.csv"),
+# Path("boobier/benzene_solubility_data_features.csv"),
+# Path("boobier/ethanol_solubility_data_features.csv"),
+# Path("llompart/llompart_features.csv"),
+# Path("krasnov/bigsol_features.csv"),
+# Path("vermeire/prepared_data.csv"),
 
 SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
 SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
-
-
-def impute_missing(data: torch.Tensor, means: torch.Tensor = None):
-    return_stats = False
-    if means is None:
-        return_stats = True
-        means = data.nanmean(dim=0)
-    # treat missing features' means as zero
-    torch.nan_to_num_(means)
-
-    # set missing rows with their column's average value
-    data = data.where(~data.isnan(), means)
-    if return_stats:
-        return data, means
-    else:
-        return data
-
-
-def quantile_transform(features: torch.Tensor, prefit: QuantileTransformer = None):
-    if prefit:
-        return torch.tensor(prefit.transform(features.numpy(force=True)))
-    features_np = features.numpy(force=True)
-    clf = QuantileTransformer(output_distribution="uniform")
-    transformed_features = torch.tensor(clf.fit_transform(features_np))
-    return transformed_features, clf
 
 
 def logS_within_0_7_percentage(truth: torch.Tensor, prediction: torch.Tensor, ignored: None, multitask: bool = False):
@@ -87,6 +68,7 @@ SCORE_LOOKUP["regression"] = (
     root_mean_squared_error_loss,
     mean_absolute_error_score,
     weighted_mean_absolute_percentage_error_score,
+    r2_score,
 )
 
 
@@ -100,7 +82,7 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
     _data_dir = Path("../../data")
     # load the training data
     if data is None:
-        df = pd.read_csv(_data_dir / Path("vermeire/prepared_data.csv"), index_col=0)
+        df = pd.read_csv(_data_dir / TRAINING_FPATH, index_col=0)
         smiles_df = df[["solute_smiles", "solvent_smiles"]]
         solubilities_og = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
         temperatures_og = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
