@@ -67,8 +67,8 @@ def _fraction_to_molarity(row):
 bigsol_data.insert(1, "logS", bigsol_data[["T,K", "Solvent", "Solubility"]].apply(_fraction_to_molarity, axis=1))
 bigsol_data = bigsol_data.dropna()
 print(len(bigsol_data), "<-- size without un-estimable solvents")
-bigsol_data = bigsol_data[["SMILES", "SMILES_Solvent", "Solubility", "T,K"]].rename(
-    columns={"Solubility": "logS", "T,K": "temperature", "SMILES": "solute_smiles", "SMILES_Solvent": "solvent_smiles"}
+bigsol_data = bigsol_data.rename(
+    columns={"T,K": "temperature", "SMILES": "solute_smiles", "SMILES_Solvent": "solvent_smiles"}
 )
 bigsol_data = bigsol_data.reset_index()
 

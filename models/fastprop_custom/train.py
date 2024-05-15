@@ -25,7 +25,7 @@ NUM_REPLICATES = 4
 SCALE_TARGETS = True
 SOLUTE_EXTRAPOLATION = True
 RANDOM_SEED = 1701  # the final frontier
-TRAINING_FPATH = Path("krasnov/bigsol_features.csv")
+TRAINING_FPATH = Path("vermeire/prepared_data.csv")
 # one of:
 # Path("boobier/acetone_solubility_data_features.csv"),
 # Path("boobier/benzene_solubility_data_features.csv"),

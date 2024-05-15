@@ -107,4 +107,4 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
-    test_ensemble(Path("output/fastprop_1715716155/checkpoints"))
+    test_ensemble(Path("output/fastprop_1715737952/checkpoints"))
