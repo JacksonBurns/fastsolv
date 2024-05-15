@@ -22,7 +22,7 @@ SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
 SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
 
 
-def parity_plot(truth, prediction, title, out_fpath):
+def parity_plot(truth, prediction, title, out_fpath, stat_str):
     plt.scatter(truth, prediction, alpha=0.1)
     plt.xlabel("truth")
     plt.ylabel("prediction")
@@ -33,8 +33,10 @@ def parity_plot(truth, prediction, title, out_fpath):
     plt.plot([min_val, max_val], [min_val-1, max_val-1], color="red", linestyle="--", alpha=0.25)
     plt.ylim(min_val, max_val)
     plt.xlim(min_val, max_val)
+    plt.text(min_val, max_val - 0.1, stat_str, horizontalalignment='left', verticalalignment='top')
     plt.title(title)
     plt.savefig(out_fpath)
+    print("wrote plot to", out_fpath)
     plt.show()
 
 
@@ -102,9 +104,11 @@ def test_ensemble(checkpoint_dir: Path):
         mse = mean_squared_error(out['logS_true'], out['logS_pred'])
         rmse = np.sqrt(mse)
         mae = mean_absolute_error(out['logS_true'], out['logS_pred'])
-        print(f"Metrics for {holdout_name}:\n - Pearson's r: {r:.4f}\n - MAE: {mae:.4f}\n - MSE: {mse:.4f}\n - RMSE: {rmse:.4f}")
-        parity_plot(out['logS_true'], out['logS_pred'], holdout_name, _output_dir / f"{holdout_name}_parity.png")
+        wn_07 = np.count_nonzero(np.abs(out['logS_true'] - out['logS_pred']) <= 0.7) / len(out['logS_pred'])
+        wn_1 = np.count_nonzero(np.abs(out['logS_true'] - out['logS_pred']) <= 1.0) / len(out['logS_pred'])
+        stat_str = f" - Pearson's r: {r:.4f}\n - MAE: {mae:.4f}\n - MSE: {mse:.4f}\n - RMSE: {rmse:.4f}\n - W/n 0.7: {wn_07:.4f}\n - W/n 1.0: {wn_1:.4f}"
+        parity_plot(out['logS_true'], out['logS_pred'], holdout_name, _output_dir / f"{holdout_name}_parity.png", stat_str)
 
 
 if __name__ == "__main__":
-    test_ensemble(Path("output/fastprop_1715737952/checkpoints"))
+    test_ensemble(Path("output/fastprop_vermeire_new_optimal/checkpoints"))

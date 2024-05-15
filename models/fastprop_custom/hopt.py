@@ -17,7 +17,7 @@ from train import RANDOM_SEED, SOLUTE_COLUMNS, SOLVENT_COLUMNS, train_ensemble
 
 logger = init_logger(__name__)
 
-NUM_HOPT_TRIALS = 512
+NUM_HOPT_TRIALS = 128
 ENABLE_BRANCHES = True
 
 
