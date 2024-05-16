@@ -49,7 +49,7 @@ class ReLUn(torch.nn.Module):
 
 
 class WideTanh(torch.nn.Module):
-    def __init__(self, width: int = 3) -> None:
+    def __init__(self, width: float = 3.14) -> None:
         super().__init__()
         self.width = width
 
