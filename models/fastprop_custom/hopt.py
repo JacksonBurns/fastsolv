@@ -10,10 +10,9 @@ import torch
 from fastprop.defaults import _init_loggers, init_logger
 from fastprop.model import fastprop
 from ray import tune
-from ray.train.torch import enable_reproducibility
 from ray.tune.search.optuna import OptunaSearch
 
-from train import RANDOM_SEED, SOLUTE_COLUMNS, SOLVENT_COLUMNS, train_ensemble
+from train import SOLUTE_COLUMNS, SOLVENT_COLUMNS, train_ensemble
 
 logger = init_logger(__name__)
 
@@ -22,26 +21,26 @@ ENABLE_BRANCHES = True
 
 
 def define_by_run_func(trial):
-    trial.suggest_categorical("act_fun", ("tanh", "relu", "relu6", "sigmoid", "leakyrelu", "relun"))
+    trial.suggest_categorical("act_fun", ("tanh", "relu", "relu6", "sigmoid", "leakyrelu"))  # , "relun"
     trial.suggest_int("interaction_hidden_size", 400, 3_400, 100)
-    trial.suggest_int("num_interaction_layers", 0, 6, 1)
+    trial.suggest_int("num_interaction_layers", 0, 4, 1)
     interaction = trial.suggest_categorical("interaction", ("concatenation", "multiplication", "subtraction"))  # "pairwisemax",
 
     if ENABLE_BRANCHES:
         # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation or pairwisemax
         if interaction in {"concatenation", "pairwisemax"}:
-            trial.suggest_int("solute_layers", 0, 6, 1)
+            trial.suggest_int("solute_layers", 0, 4, 1)
             trial.suggest_int("solute_hidden_size", 200, 2_200, 100)
-            trial.suggest_int("solvent_layers", 0, 6, 1)
+            trial.suggest_int("solvent_layers", 0, 4, 1)
             trial.suggest_int("solvent_hidden_size", 200, 2_200, 100)
         else:
-            solute_layers = trial.suggest_int("solute_layers", 0, 5, 1)
+            solute_layers = trial.suggest_int("solute_layers", 0, 4, 1)
             if solute_layers == 0:
                 trial.suggest_int("solvent_layers", 0, 0)
                 trial.suggest_int("solute_hidden_size", 0, 0)
                 trial.suggest_int("solvent_hidden_size", 0, 0)
             else:
-                trial.suggest_int("solvent_layers", 1, 6, 1)
+                trial.suggest_int("solvent_layers", 1, 4, 1)
                 matched_hidden_size = trial.suggest_int("solute_hidden_size", 200, 2_200, 100)
                 trial.suggest_int("solvent_hidden_size", matched_hidden_size, matched_hidden_size)
     else:
@@ -110,8 +109,6 @@ def _hopt_objective(
     solute_features = ray.get(solute_features_ref)
     solvent_features = ray.get(solvent_features_ref)
     smiles_df = ray.get(smiles_df_ref)
-    random_seed = RANDOM_SEED
-    enable_reproducibility(random_seed)
     validation_results_df, _ = train_ensemble(
         data=(solute_features, solvent_features, temperatures, solubilities, smiles_df),
         remove_output=True,
