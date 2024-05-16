@@ -52,16 +52,18 @@ def test_ensemble(checkpoint_dir: Path):
             Path("boobier/acetone_solubility_data_features.csv"),
             Path("boobier/benzene_solubility_data_features.csv"),
             Path("boobier/ethanol_solubility_data_features.csv"),
-            Path("llompart/llompart_features.csv"),
-            Path("krasnov/bigsol_features.csv"),
+            Path("llompart/llompart_aqsoldb.csv"),
+            Path("llompart/llompart_ochem.csv"),
+            Path("krasnov/bigsol_downsample_features.csv"),
             Path("vermeire/prepared_data.csv"),
         ),
         (
             "boobier_acetone",
             "boobier_benzene",
             "boobier_ethanol",
-            "llompart",
-            "krasnov",
+            "llompart_aqsoldb",
+            "llompart_ochem",
+            "krasnov_downsample",
             "vermeire",
         ),
     ):
@@ -97,6 +99,7 @@ def test_ensemble(checkpoint_dir: Path):
         out = pd.DataFrame(res, columns=["logS_pred", "stdev"], index=smiles)
         out.index.name = 'smiles'
         out.insert(0, "logS_true", df["logS"].tolist())
+        out.insert(1, "temperature", df["temperature"].tolist())
         out.to_csv(_output_dir / (holdout_fpath.stem + "_predictions.csv"))
 
         # performance metrics
@@ -111,4 +114,4 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
-    test_ensemble(Path("output/fastprop_vermeire_new_optimal/checkpoints"))
+    test_ensemble(Path("output/fastprop_1715878290/checkpoints"))

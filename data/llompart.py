@@ -6,46 +6,126 @@
 #
 # Calculate molecular features needed for fastprop modeling
 #
-# Start by downloading the CSV file:
+# Start by downloading the CSV files at:
 # https://entrepot.recherche.data.gouv.fr/dataset.xhtml?persistentId=doi:10.57745/CZVZIA#
 #
 # Running this will then csv files for fastprop predicting.
+#
+# Follows the curation procedure described in:
+# https://doi.org/10.1038/s41597-024-03105-6
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from rdkit import Chem
+from rdkit.Chem.SaltRemover import SaltRemover
 
 from utils import get_descs
-
-DROP_OVERLAP = False
-# ends up removing these six molecules
-# {
-#     "N#Cc1c(Cl)c(Cl)c(Cl)c(C#N)c1Cl",
-#     "CCOC(=O)c1ccc(O)cc1",
-#     "O=C(c1ccccc1)C(O)c1ccccc1",
-#     "CC(O)(CS(=O)(=O)c1ccc(F)cc1)C(=O)Nc1ccc(C#N)c(C(F)(F)F)c1",
-#     "c1ccc2[nH]c(-c3cscn3)nc2c1",
-#     "OC1C(O)C(O)C(O)C(O)C1O",
-# }
-
-llompart_data: pd.DataFrame = pd.read_csv("OChemUnseen.csv")
-if DROP_OVERLAP:
-    print(len(llompart_data), "<--- number of molecules in the original dataset")
-    # drop any which are also in our data
-    vermeire_smiles = set(Chem.CanonSmiles(s) for s in pd.read_csv(Path("vermeire/prepared_data.csv"), index_col=0)["solute_smiles"])
-    llompart_smiles = set(Chem.CanonSmiles(s) for s in llompart_data["SMILES"])
-    overlapped_smiles = tuple(vermeire_smiles.intersection(llompart_smiles))
-    llompart_data = llompart_data[~llompart_data["SMILES"].isin(overlapped_smiles)]
-    print(len(llompart_data), "<--- number of molecules after dropping those in our training dataset")
-
-llompart_data.insert(0, "temperature", 273.15 + 25)
-llompart_data.insert(0, "solvent_smiles", "O")
-llompart_data = llompart_data.rename(columns={"LogS": "logS", "T": "temperature", "SMILES": "solute_smiles"})
-llompart_data = llompart_data.reset_index()
-
-fastprop_data = get_descs(llompart_data)
 
 _dest = Path("llompart")
 if not Path.exists(_dest):
     Path.mkdir(_dest)
-fastprop_data.to_csv(_dest / "llompart_features.csv")
+
+disallowed_atoms = {
+    "La",
+    "Ce",
+    "Pr",
+    "Nd",
+    "Pm",
+    "Sm",
+    "Eu",
+    "Gd",
+    "Tb",
+    "Dy",
+    "Ho",
+    "Er",
+    "Tm",
+    "Yb",
+    "Lu",
+    "Ac",
+    "Th",
+    "Pa",
+    "U",
+    "Np",
+    "Pu",
+    "Am",
+    "Cm",
+    "Bk",
+    "Cf",
+    "Es",
+    "Fm",
+    "Md",
+    "No",
+    "Lr",
+    "Be",
+    "Mg",
+    "Ca",
+    "Sr",
+    "Ba",
+    "Li",
+    "Na",
+    "K",
+    "Rb",
+    "Cs",
+}
+
+
+def _keep(s):
+    if not isinstance(s, str):
+        return False
+    if "." in s:
+        return False
+    mol = Chem.MolFromSmiles(s)
+    remover = SaltRemover()
+    new_mol = remover.StripMol(mol)
+    if mol.GetNumAtoms() != new_mol.GetNumAtoms():
+        return False
+    if mol.GetNumAtoms() < 2:
+        return False
+    for atom in disallowed_atoms:
+        if atom in s:
+            return False
+    return True
+
+
+# AqSolDBc
+df = pd.read_csv("AqSolDBc.csv")
+print(len(df), "<-- original AqSolDB")
+df = df[
+    ~df["Charge"].isin(("PureChargeSeparation",))
+    & df["SMILEScurated"].apply(_keep)  # no missing SMILES, no salts, 2+ atoms, no banned atoms
+    & df["SD"].le(0.5)  # deviation less than 0.5
+    & df["Composition"].isin(("mono-constituent", np.nan))  # no unknown or multi-constituent
+    & df["Error"].isna()  # no other miscellaneous error
+]
+print(len(df), "<-- curated")
+df.insert(0, "temperature", 273.15 + 25)
+df.insert(0, "solvent_smiles", "O")
+df = df.rename(columns={"Solubility": "logS", "SMILEScurated": "solute_smiles"})
+df = df.reset_index()
+
+fastprop_data = get_descs(df)
+
+fastprop_data.to_csv(_dest / "llompart_aqsoldb.csv")
+
+# OChemUnseen (starts from Curated to apply the same preprocessing)
+df: pd.DataFrame = pd.read_csv("OChemCurated.csv")
+print(len(df), "<-- original OChemCurated")
+smiles_to_temp = {smi: temp for smi, temp in zip(df["SMILES"], df["Temperature"])}
+to_drop = df["SMILES"][~(
+    df["SMILES"].apply(_keep)  # no missing SMILES, no salts, 2+ atoms, no banned atoms
+    & df["SDi"].le(0.5))  # deviation less than 0.5
+].to_list()
+print(len(to_drop), "<-- eligible to be dropped")
+
+df: pd.DataFrame = pd.read_csv("OChemUnseen.csv")
+print(len(df), "<-- non-overlapping")
+df = df[~df["SMILES"].isin(to_drop)]
+df.insert(0, "solvent_smiles", "O")
+df.insert(0, "temperature", [smiles_to_temp.get(s, 25) + 273.15 for s in df["SMILES"]])
+df = df.rename(columns={"SMILES": "solute_smiles", "LogS": "logS", "Temperature": "temperature"}).reset_index()
+print(len(df), "<-- non-overlapping, dropped")
+
+fastprop_data = get_descs(df)
+
+fastprop_data.to_csv(_dest / "llompart_ochem.csv")

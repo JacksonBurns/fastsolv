@@ -194,14 +194,14 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
 if __name__ == "__main__":
     train_ensemble(
         remove_output=False,
-        num_solute_layers=2,
-        solute_hidden_size=300,
-        num_solvent_layers=2,
-        solvent_hidden_size=300,
+        num_solute_layers=3,
+        solute_hidden_size=1_800,
+        num_solvent_layers=3,
+        solvent_hidden_size=1_800,
         num_interaction_layers=1,
         interaction_hidden_size=2_300,
         interaction_operation="multiplication",
-        activation_fxn="sigmoid",
+        activation_fxn="leakyrelu",
         num_features=1613,
         learning_rate=0.0001,
     )

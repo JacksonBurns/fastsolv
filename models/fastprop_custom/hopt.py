@@ -22,7 +22,7 @@ ENABLE_BRANCHES = True
 
 
 def define_by_run_func(trial):
-    trial.suggest_categorical("act_fun", ("relu", "relu6", "sigmoid", "leakyrelu", "relun"))
+    trial.suggest_categorical("act_fun", ("tanh", "relu", "relu6", "sigmoid", "leakyrelu", "relun"))
     trial.suggest_int("interaction_hidden_size", 400, 3_400, 100)
     trial.suggest_int("num_interaction_layers", 0, 6, 1)
     interaction = trial.suggest_categorical("interaction", ("concatenation", "multiplication", "subtraction"))  # "pairwisemax",

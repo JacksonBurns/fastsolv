@@ -13,7 +13,7 @@ from fastprop.model import fastprop as _fastprop
 ENABLE_SNN = False
 ENABLE_DROPOUT = False
 ENABLE_BATCHNORM = False
-ENABLE_INPUT_SIGMOID = True
+ENABLE_INPUT_ACTIVATION = True
 
 
 class Concatenation(torch.nn.Module):
@@ -48,19 +48,28 @@ class ReLUn(torch.nn.Module):
         return torch.nn.functional.relu(batch).minimum(self.n)
 
 
+class WideTanh(torch.nn.Module):
+    def __init__(self, width: int = 3) -> None:
+        super().__init__()
+        self.width = width
+
+    def forward(self, batch: torch.Tensor):
+        return torch.nn.functional.tanh(batch / self.width)
+
+
 def _build_mlp(input_size, hidden_size, act_fun, num_layers):
     modules = []
     for i in range(num_layers):
         modules.append(torch.nn.Linear(input_size if i == 0 else hidden_size, hidden_size))
         if i < num_layers - 1:  # no activation after last layer
-            if ENABLE_BATCHNORM:
-                modules.append(torch.nn.BatchNorm1d(hidden_size))
             if ENABLE_SNN:
                 modules.append(torch.nn.SELU())
                 if ENABLE_DROPOUT:
                     modules.append(torch.nn.AlphaDropout())
             else:
                 if act_fun == "sigmoid":
+                    modules.append(torch.nn.Sigmoid())
+                elif act_fun == "tanh":
                     modules.append(torch.nn.Tanh())
                 elif act_fun == "relu":
                     modules.append(torch.nn.ReLU())
@@ -74,6 +83,8 @@ def _build_mlp(input_size, hidden_size, act_fun, num_layers):
                     raise TypeError(f"What is {act_fun}?")
                 if ENABLE_DROPOUT:
                     modules.append(torch.nn.Dropout())
+                if ENABLE_BATCHNORM:
+                    modules.append(torch.nn.BatchNorm1d(hidden_size))
     return modules
 
 
@@ -87,7 +98,7 @@ class fastpropSolubility(_fastprop):
         num_interaction_layers: int = 0,
         interaction_hidden_size: int = 1_000,
         interaction_operation: Literal["concatenation", "multiplication", "subtraction", "pairwisemax"] = "concatenation",
-        activation_fxn: Literal["relu", "relu6", "sigmoid", "leakyrelu", "relun"] = "relu6",
+        activation_fxn: Literal["relu", "relu6", "sigmoid", "leakyrelu", "relun", "tanh"] = "relu6",
         num_features: int = 1613,
         learning_rate: float = 0.0001,
         target_means: torch.Tensor = None,
@@ -124,14 +135,15 @@ class fastpropSolubility(_fastprop):
 
         # solute - temperature is concatenated to the input features
         solute_modules = _build_mlp(num_features + 1, solute_hidden_size, activation_fxn, num_solute_layers)
-        if ENABLE_INPUT_SIGMOID:
-            solute_modules.insert(0, torch.nn.Sigmoid())
+        # bound input for unbounded loss functions
+        if ENABLE_INPUT_ACTIVATION and activation_fxn in {"relu", "leakyrelu"}:
+            solute_modules.insert(0, WideTanh())
         solute_hidden_size = num_features + 1 if num_solute_layers == 0 else solute_hidden_size
 
         # solvent - temperature is concatenated to the input features
         solvent_modules = _build_mlp(num_features + 1, solvent_hidden_size, activation_fxn, num_solvent_layers)
-        if ENABLE_INPUT_SIGMOID:
-            solvent_modules.insert(0, torch.nn.Sigmoid())
+        if ENABLE_INPUT_ACTIVATION and activation_fxn in {"relu", "leakyrelu"}:
+            solvent_modules.insert(0, WideTanh())
         solvent_hidden_size = num_features + 1 if num_solvent_layers == 0 else solvent_hidden_size
 
         # assemble modules (if empty, just passes input through)
