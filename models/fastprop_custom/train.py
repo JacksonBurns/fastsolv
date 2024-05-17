@@ -25,14 +25,16 @@ NUM_REPLICATES = 4
 SCALE_TARGETS = True
 SOLUTE_EXTRAPOLATION = True
 RANDOM_SEED = 1701  # the final frontier
-TRAINING_FPATH = Path("vermeire/prepared_data.csv")
+TRAINING_FPATH = Path("vermeire/vermeire_nonaq.csv")
 # one of:
-# Path("boobier/acetone_solubility_data_features.csv"),
-# Path("boobier/benzene_solubility_data_features.csv"),
-# Path("boobier/ethanol_solubility_data_features.csv"),
-# Path("llompart/llompart_features.csv"),
-# Path("krasnov/bigsol_features.csv"),
-# Path("vermeire/prepared_data.csv"),
+# Path("boobier/acetone_solubility_data_features.csv")
+# Path("boobier/benzene_solubility_data_features.csv")
+# Path("boobier/ethanol_solubility_data_features.csv")
+# Path("llompart/llompart_aqsoldb.csv")
+# Path("llompart/llompart_ochem.csv")
+# Path("krasnov/bigsol_features.csv")
+# Path("vermeire/vermeire_aq.csv")
+# Path("vermeire/vermeire_nonaq.csv")
 
 SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
 SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
@@ -194,12 +196,13 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
 if __name__ == "__main__":
     train_ensemble(
         remove_output=False,
-        num_solute_layers=3,
-        solute_hidden_size=1_800,
-        num_solvent_layers=3,
-        solvent_hidden_size=1_800,
-        num_interaction_layers=1,
-        interaction_hidden_size=2_300,
+        num_solute_layers=2,
+        solute_hidden_size=900,
+        num_solvent_layers=2,
+        solvent_hidden_size=900,
+        num_interaction_layers=2,
+        interaction_hidden_size=2000,
+        input_activation="clamp3",
         interaction_operation="multiplication",
         activation_fxn="leakyrelu",
         num_features=1613,

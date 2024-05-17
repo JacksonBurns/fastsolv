@@ -111,7 +111,7 @@ fastprop_data.to_csv(_dest / "llompart_aqsoldb.csv")
 # OChemUnseen (starts from Curated to apply the same preprocessing)
 df: pd.DataFrame = pd.read_csv("OChemCurated.csv")
 print(len(df), "<-- original OChemCurated")
-smiles_to_temp = {smi: temp for smi, temp in zip(df["SMILES"], df["Temperature"])}
+smiles_to_temp = {smi: temp for smi, temp in zip(df["SMILES"], df["Temperature"], strict=True)}
 to_drop = df["SMILES"][~(
     df["SMILES"].apply(_keep)  # no missing SMILES, no salts, 2+ atoms, no banned atoms
     & df["SDi"].le(0.5))  # deviation less than 0.5

@@ -12,8 +12,7 @@ from fastprop.model import fastprop as _fastprop
 
 ENABLE_SNN = False
 ENABLE_DROPOUT = False
-ENABLE_BATCHNORM = False
-ENABLE_INPUT_ACTIVATION = True
+ENABLE_BATCHNORM = True
 
 
 class Concatenation(torch.nn.Module):
@@ -57,11 +56,25 @@ class WideTanh(torch.nn.Module):
         return torch.nn.functional.tanh(batch / self.width)
 
 
+# inputs are normally distributed (by our scaling) so clamping at n
+# is like applying a n-sigma cutoff, i.e. anything else is an outlier
+class ClampN(torch.nn.Module):
+    def __init__(self, n: float) -> None:
+        super().__init__()
+        self.n = n
+
+    def forward(self, batch: torch.Tensor):
+        return torch.clamp(batch, min=-self.n, max=self.n)
+
+    def extra_repr(self) -> str:
+        return f"n={self.n}"
+
+
 def _build_mlp(input_size, hidden_size, act_fun, num_layers):
     modules = []
     for i in range(num_layers):
         modules.append(torch.nn.Linear(input_size if i == 0 else hidden_size, hidden_size))
-        if i < num_layers - 1:  # no activation after last layer
+        if (num_layers == 1) or (i < num_layers - 1):  # no activation after last layer, unless perceptron
             if ENABLE_SNN:
                 modules.append(torch.nn.SELU())
                 if ENABLE_DROPOUT:
@@ -99,6 +112,7 @@ class fastpropSolubility(_fastprop):
         interaction_hidden_size: int = 1_000,
         interaction_operation: Literal["concatenation", "multiplication", "subtraction", "pairwisemax"] = "concatenation",
         activation_fxn: Literal["relu", "relu6", "sigmoid", "leakyrelu", "relun", "tanh"] = "relu6",
+        input_activation: Literal["sigmoid", "tanh", "clamp3"] = None,
         num_features: int = 1613,
         learning_rate: float = 0.0001,
         target_means: torch.Tensor = None,
@@ -135,16 +149,22 @@ class fastpropSolubility(_fastprop):
 
         # solute - temperature is concatenated to the input features
         solute_modules = _build_mlp(num_features + 1, solute_hidden_size, activation_fxn, num_solute_layers)
-        # bound input for unbounded loss functions
-        if ENABLE_INPUT_ACTIVATION and activation_fxn in {"relu", "leakyrelu"}:
-            solute_modules.insert(0, WideTanh())
         solute_hidden_size = num_features + 1 if num_solute_layers == 0 else solute_hidden_size
 
         # solvent - temperature is concatenated to the input features
         solvent_modules = _build_mlp(num_features + 1, solvent_hidden_size, activation_fxn, num_solvent_layers)
-        if ENABLE_INPUT_ACTIVATION and activation_fxn in {"relu", "leakyrelu"}:
-            solvent_modules.insert(0, WideTanh())
         solvent_hidden_size = num_features + 1 if num_solvent_layers == 0 else solvent_hidden_size
+
+        # optionally bound input
+        if input_activation == "clamp3":
+            solute_modules.insert(0, ClampN(n=3.0))
+            solvent_modules.insert(0, ClampN(n=3.0))
+        elif input_activation == "sigmoid":
+            solute_modules.insert(0, torch.nn.Sigmoid())
+            solvent_modules.insert(0, torch.nn.Sigmoid())
+        elif input_activation == "tanh":
+            solute_modules.insert(0, torch.nn.Tanh())
+            solvent_modules.insert(0, torch.nn.Tanh())
 
         # assemble modules (if empty, just passes input through)
         self.solute_representation_module = torch.nn.Sequential(*solute_modules)
@@ -239,7 +259,8 @@ if __name__ == "__main__":
         num_interaction_layers=2,
         interaction_hidden_size=2_400,
         interaction_operation="pairwisemax",
-        activation_fxn="relu6",
+        activation_fxn="relu",
+        input_activation="clamp3",
         num_features=100,
         learning_rate=0.01,
         target_means=None,

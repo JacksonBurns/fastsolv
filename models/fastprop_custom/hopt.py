@@ -16,31 +16,31 @@ from train import SOLUTE_COLUMNS, SOLVENT_COLUMNS, train_ensemble
 
 logger = init_logger(__name__)
 
-NUM_HOPT_TRIALS = 128
+NUM_HOPT_TRIALS = 512
 ENABLE_BRANCHES = True
 
 
 def define_by_run_func(trial):
-    trial.suggest_categorical("act_fun", ("tanh", "relu", "relu6", "sigmoid", "leakyrelu"))  # , "relun"
+    trial.suggest_categorical("act_fun", ("tanh", "relu", "relu6", "sigmoid", "leakyrelu"))
+    trial.suggest_categorical("in_act", ("tanh", "sigmoid", "clamp3", None))
     trial.suggest_int("interaction_hidden_size", 400, 3_400, 100)
-    trial.suggest_int("num_interaction_layers", 0, 4, 1)
-    interaction = trial.suggest_categorical("interaction", ("concatenation", "multiplication", "subtraction"))  # "pairwisemax",
-
+    trial.suggest_int("num_interaction_layers", 0, 6, 1)
+    interaction = trial.suggest_categorical("interaction", ("concatenation", "multiplication", "subtraction", "pairwisemax"))
     if ENABLE_BRANCHES:
         # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation or pairwisemax
         if interaction in {"concatenation", "pairwisemax"}:
-            trial.suggest_int("solute_layers", 0, 4, 1)
+            trial.suggest_int("solute_layers", 0, 6, 1)
             trial.suggest_int("solute_hidden_size", 200, 2_200, 100)
-            trial.suggest_int("solvent_layers", 0, 4, 1)
+            trial.suggest_int("solvent_layers", 0, 6, 1)
             trial.suggest_int("solvent_hidden_size", 200, 2_200, 100)
         else:
-            solute_layers = trial.suggest_int("solute_layers", 0, 4, 1)
+            solute_layers = trial.suggest_int("solute_layers", 0, 6, 1)
             if solute_layers == 0:
                 trial.suggest_int("solvent_layers", 0, 0)
                 trial.suggest_int("solute_hidden_size", 0, 0)
                 trial.suggest_int("solvent_hidden_size", 0, 0)
             else:
-                trial.suggest_int("solvent_layers", 1, 4, 1)
+                trial.suggest_int("solvent_layers", 1, 6, 1)
                 matched_hidden_size = trial.suggest_int("solute_hidden_size", 200, 2_200, 100)
                 trial.suggest_int("solvent_hidden_size", matched_hidden_size, matched_hidden_size)
     else:
@@ -54,14 +54,13 @@ def main():
     logging.getLogger("pytorch_lightning").setLevel(logging.INFO)
 
     # load the data
-    df = pd.read_csv(Path("../../data/vermeire/prepared_data.csv"), index_col=0)
+    df = pd.read_csv(Path("../../data/vermeire/vermeire_nonaq.csv"), index_col=0)
     smiles_df = df[["solute_smiles", "solvent_smiles"]]
     solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
     temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
     solute_features = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
     solvent_features = torch.tensor(df[SOLVENT_COLUMNS].to_numpy(), dtype=torch.float32)
 
-    logger.info("Run 'tensorboard --logdir output/tensorboard_logs' to track training progress.")
     metric = fastprop.get_metric("regression")
     algo = OptunaSearch(space=define_by_run_func, metric=metric, mode="min")
     solubilites_ref = ray.put(solubilities)
@@ -121,6 +120,7 @@ def _hopt_objective(
         interaction_hidden_size=trial["interaction_hidden_size"],
         interaction_operation=trial["interaction"],
         activation_fxn=trial["act_fun"],
+        input_activation=trial["in_act"],
         num_features=1_613,
         learning_rate=0.0001,
     )

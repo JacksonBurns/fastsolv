@@ -52,20 +52,27 @@ def test_ensemble(checkpoint_dir: Path):
             Path("boobier/acetone_solubility_data_features.csv"),
             Path("boobier/benzene_solubility_data_features.csv"),
             Path("boobier/ethanol_solubility_data_features.csv"),
-            Path("llompart/llompart_aqsoldb.csv"),
-            Path("llompart/llompart_ochem.csv"),
-            Path("krasnov/bigsol_downsample_features.csv"),
-            Path("vermeire/prepared_data.csv"),
+            # Path("llompart/llompart_aqsoldb.csv"),
+            # Path("llompart/llompart_ochem.csv"),
+            # Path("krasnov/bigsol_downsample_aq_features.csv"),
+            Path("krasnov/bigsol_downsample_nonaq_features.csv"),
+            # Path("vermeire/prepared_data.csv"),
+            # Path("vermeire/vermeire_aq.csv"),
+            Path("vermeire/vermeire_nonaq.csv"),
         ),
         (
             "boobier_acetone",
             "boobier_benzene",
             "boobier_ethanol",
-            "llompart_aqsoldb",
-            "llompart_ochem",
-            "krasnov_downsample",
-            "vermeire",
+            # "llompart_aqsoldb",
+            # "llompart_ochem",
+            # "krasnov_downsample_aq",
+            "krasnov_downsample_nonaq",
+            # "vermeire",
+            # "vermeire_aq",
+            "vermeire_nonaq",
         ),
+        strict=True,
     ):
         # load the holdout data
         df = pd.read_csv(Path("../../data") / holdout_fpath, index_col=0)
@@ -114,4 +121,4 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
-    test_ensemble(Path("output/fastprop_1715878290/checkpoints"))
+    test_ensemble(Path("output/fastprop_1715974127/checkpoints"))
