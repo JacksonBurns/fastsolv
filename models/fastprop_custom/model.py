@@ -10,6 +10,7 @@ import torch
 from fastprop.data import inverse_standard_scale, standard_scale
 from fastprop.model import fastprop as _fastprop
 
+AQ_ONLY = True
 ENABLE_SNN = False
 ENABLE_DROPOUT = False
 ENABLE_BATCHNORM = True
@@ -184,7 +185,7 @@ class fastpropSolubility(_fastprop):
                     f"Invalid choice of interaction ({interaction_operation}) for mis-matched solute/solvent"
                     f" embedding sizes {solute_hidden_size}/{solvent_hidden_size}."
                 )
-            num_interaction_features = solvent_hidden_size + 1  # plus temperature
+            num_interaction_features = solute_hidden_size + 1  # plus temperature
             if interaction_operation == "multiplication":
                 interaction_modules.append(Multiplication())
             elif interaction_operation == "subtraction":
@@ -195,15 +196,21 @@ class fastpropSolubility(_fastprop):
         self.interaction_module = torch.nn.Sequential(*interaction_modules)
 
         # readout
-        self.readout = torch.nn.Linear(num_interaction_features if num_interaction_layers == 0 else interaction_hidden_size + 1, 1)
+        if AQ_ONLY:
+            self.readout = torch.nn.Linear(solute_hidden_size, 1)
+        else:
+            self.readout = torch.nn.Linear(num_interaction_features if num_interaction_layers == 0 else interaction_hidden_size + 1, 1)
         self.save_hyperparameters()
 
     def forward(self, batch):
         solute_features, solvent_features, temperature = batch
         solute_representation = self.solute_representation_module(torch.cat((solute_features, temperature), dim=1))
-        solvent_representation = self.solvent_representation_module(torch.cat((solvent_features, temperature), dim=1))
-        output = self.interaction_module((solute_representation, solvent_representation, temperature))
-        y_hat = self.readout(output)
+        if not AQ_ONLY:
+            solvent_representation = self.solvent_representation_module(torch.cat((solvent_features, temperature), dim=1))
+            output = self.interaction_module((solute_representation, solvent_representation, temperature))
+            y_hat = self.readout(output)
+        else:
+            y_hat = self.readout(solute_representation)
         return y_hat
 
     def predict_step(self, batch):

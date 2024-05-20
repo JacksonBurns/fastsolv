@@ -144,6 +144,7 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
                 solubilities[train_indexes],
             ),
             shuffle=True,
+            drop_last=True,
         )
         val_dataloader = fastpropDataLoader(
             SolubilityDataset(

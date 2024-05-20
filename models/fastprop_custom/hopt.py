@@ -13,6 +13,7 @@ from ray import tune
 from ray.tune.search.optuna import OptunaSearch
 
 from train import SOLUTE_COLUMNS, SOLVENT_COLUMNS, train_ensemble
+from model import AQ_ONLY
 
 logger = init_logger(__name__)
 
@@ -23,6 +24,10 @@ ENABLE_BRANCHES = True
 def define_by_run_func(trial):
     trial.suggest_categorical("act_fun", ("tanh", "relu", "relu6", "sigmoid", "leakyrelu"))
     trial.suggest_categorical("in_act", ("tanh", "sigmoid", "clamp3", None))
+    if AQ_ONLY:
+        trial.suggest_int("solute_layers", 0, 6, 1)
+        trial.suggest_int("solute_hidden_size", 200, 3_000, 100)
+        return {"interaction": "pairwisemax", "interaction_hidden_size": 0, "num_interaction_layers": 0, "solvent_layers": 0, "solvent_hidden_size": 0}
     trial.suggest_int("interaction_hidden_size", 400, 3_400, 100)
     trial.suggest_int("num_interaction_layers", 0, 6, 1)
     interaction = trial.suggest_categorical("interaction", ("concatenation", "multiplication", "subtraction", "pairwisemax"))
@@ -54,7 +59,7 @@ def main():
     logging.getLogger("pytorch_lightning").setLevel(logging.INFO)
 
     # load the data
-    df = pd.read_csv(Path("../../data/vermeire/vermeire_nonaq.csv"), index_col=0)
+    df = pd.read_csv(Path("../../data/vermeire/vermeire_aq.csv"), index_col=0)
     smiles_df = df[["solute_smiles", "solvent_smiles"]]
     solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
     temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
@@ -89,7 +94,7 @@ def main():
         ),
     )
     results = tuner.fit()
-    results.get_dataframe().to_csv("hopt_results.csv")
+    results.get_dataframe().to_csv("hopt_results_aq_plain_bnorm.csv")
     best = results.get_best_result().config
     logger.info(f"Best hyperparameters identified: {', '.join([key + ': ' + str(val) for key, val in best.items()])}")
     return best
