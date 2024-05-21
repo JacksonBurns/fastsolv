@@ -16,6 +16,7 @@ from train import SOLUTE_COLUMNS, SOLVENT_COLUMNS, train_ensemble
 from model import AQ_ONLY
 
 logger = init_logger(__name__)
+ray.init(_temp_dir='/state/partition1/user/jburns', num_cpus=40, num_gpus=2)
 
 NUM_HOPT_TRIALS = 512
 ENABLE_BRANCHES = True
@@ -83,11 +84,11 @@ def main():
                 solvent_features_ref,
                 smiles_df_ref,
             ),
-            resources={"gpu": 1, "cpu": psutil.cpu_count()},
+            resources={"gpu": 1, "cpu": 20},
         ),
         tune_config=tune.TuneConfig(
             search_alg=algo,
-            max_concurrent_trials=1,
+            max_concurrent_trials=2,
             num_samples=NUM_HOPT_TRIALS,
             metric=metric,
             mode="min",
