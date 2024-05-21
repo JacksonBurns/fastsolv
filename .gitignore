@@ -5,3 +5,5 @@ paper/paper.pdf
 *.pyc
 models/fastprop_custom/output*
 checkpoints/
+slurm*err
+slurm*out
