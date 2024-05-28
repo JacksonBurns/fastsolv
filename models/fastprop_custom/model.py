@@ -164,11 +164,9 @@ class fastpropSolubility(_fastprop):
 
     def forward(self, batch):
         solute_features, solvent_features, temperature, is_water = batch
-        water_features = solvent_features * is_water
-        nonaq_features = solvent_features * (1 - is_water)
         solute_representation = self.solute_representation_module(torch.cat((solute_features, temperature), dim=1))
-        solvent_representation = self.solvent_representation_module(torch.cat((nonaq_features, temperature), dim=1))
-        water_representation = self.water_representation_module(torch.cat((water_features, temperature), dim=1))
+        solvent_representation = self.solvent_representation_module(torch.cat((solvent_features, temperature), dim=1)) * (1 - is_water)
+        water_representation = self.water_representation_module(torch.cat((solvent_features, temperature), dim=1)) * is_water
         output = self.interaction_module((solute_representation, solvent_representation, water_representation, temperature))
         y_hat = self.readout(output)
         return y_hat
