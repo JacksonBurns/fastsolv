@@ -21,7 +21,7 @@ from model import fastpropSolubility
 
 logger = init_logger(__name__)
 
-NUM_REPLICATES = 4
+NUM_REPLICATES = 6
 SCALE_TARGETS = True
 STUDY_SPLIT = True
 RANDOM_SEED = 1701  # the final frontier

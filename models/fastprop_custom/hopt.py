@@ -20,8 +20,8 @@ NUM_HOPT_TRIALS = 1024
 
 
 def define_by_run_func(trial):
-    trial.suggest_categorical("activation_fxn", ("tanh", "relu", "relu6", "sigmoid", "leakyrelu"))
-    trial.suggest_categorical("input_activation", ("tanh", "sigmoid", "clamp3", None))
+    trial.suggest_categorical("activation_fxn", ("relu", "leakyrelu"))
+    trial.suggest_categorical("input_activation", ("tanh", "sigmoid"))
     trial.suggest_int("interaction_hidden_size", 400, 2_000, step=100)
     trial.suggest_int("branch_hidden_size", 400, 2_000, step=100)
     trial.suggest_int("num_interaction_layers", 1, 4, step=1)

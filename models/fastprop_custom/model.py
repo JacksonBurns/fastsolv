@@ -12,7 +12,7 @@ from fastprop.model import fastprop as _fastprop
 
 ENABLE_SNN = False
 ENABLE_DROPOUT = False
-ENABLE_BATCHNORM = True
+ENABLE_BATCHNORM = False
 
 
 class Addition(torch.nn.Module):
@@ -164,9 +164,10 @@ class fastpropSolubility(_fastprop):
 
     def forward(self, batch):
         solute_features, solvent_features, temperature, is_water = batch
-        solute_representation = self.solute_representation_module(torch.cat((solute_features, temperature), dim=1))
-        solvent_representation = self.solvent_representation_module(torch.cat((solvent_features, temperature), dim=1))
         water_features = solvent_features * is_water
+        nonaq_features = solvent_features * (1 - is_water)
+        solute_representation = self.solute_representation_module(torch.cat((solute_features, temperature), dim=1))
+        solvent_representation = self.solvent_representation_module(torch.cat((nonaq_features, temperature), dim=1))
         water_representation = self.water_representation_module(torch.cat((water_features, temperature), dim=1))
         output = self.interaction_module((solute_representation, solvent_representation, water_representation, temperature))
         y_hat = self.readout(output)
