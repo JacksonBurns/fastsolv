@@ -1,7 +1,7 @@
 """
 model.py - solubility prediction model definition
 
-batches are organized (solute, solvent, temperature)
+batches are organized (solute, solvent, temperature, is_water)
 """
 
 from typing import Literal
@@ -10,33 +10,14 @@ import torch
 from fastprop.data import inverse_standard_scale, standard_scale
 from fastprop.model import fastprop as _fastprop
 
-AQ_ONLY = True
 ENABLE_SNN = False
 ENABLE_DROPOUT = False
 ENABLE_BATCHNORM = True
 
 
-class Concatenation(torch.nn.Module):
+class Addition(torch.nn.Module):
     def forward(self, batch):
-        return torch.cat(batch, dim=1)
-
-
-class Multiplication(torch.nn.Module):
-    def forward(self, batch):
-        return torch.cat((batch[0] * batch[1], batch[2]), dim=1)
-
-
-class Subtraction(torch.nn.Module):
-    def forward(self, batch):
-        return torch.cat((batch[0] - batch[1], batch[2]), dim=1)
-
-
-# just had a lecture about transformers, this is kinda like something from that, i guess (not really)
-class PairwiseMax(torch.nn.Module):
-    def forward(self, batch):
-        pairswise_intxns = torch.matmul(batch[0].unsqueeze(2), batch[1].unsqueeze(1))
-        maxes, _ = pairswise_intxns.max(dim=2)
-        return torch.cat((maxes, batch[2]), dim=1)
+        return torch.cat((batch[0] + batch[1] + batch[2], batch[3]), dim=1)
 
 
 class ReLUn(torch.nn.Module):
@@ -105,13 +86,12 @@ def _build_mlp(input_size, hidden_size, act_fun, num_layers):
 class fastpropSolubility(_fastprop):
     def __init__(
         self,
-        num_solute_layers: int = 0,
-        solute_hidden_size: int = 1_000,
-        num_solvent_layers: int = 0,
-        solvent_hidden_size: int = 1_000,
-        num_interaction_layers: int = 0,
+        num_solute_layers: int = 1,
+        num_solvent_layers: int = 1,
+        num_water_layers: int = 1,
+        branch_hidden_size: int = 2_000,
+        num_interaction_layers: int = 1,
         interaction_hidden_size: int = 1_000,
-        interaction_operation: Literal["concatenation", "multiplication", "subtraction", "pairwisemax"] = "concatenation",
         activation_fxn: Literal["relu", "relu6", "sigmoid", "leakyrelu", "relun", "tanh"] = "relu6",
         input_activation: Literal["sigmoid", "tanh", "clamp3"] = None,
         num_features: int = 1613,
@@ -149,12 +129,13 @@ class fastpropSolubility(_fastprop):
         self.register_buffer("temperature_vars", temperature_vars)
 
         # solute - temperature is concatenated to the input features
-        solute_modules = _build_mlp(num_features + 1, solute_hidden_size, activation_fxn, num_solute_layers)
-        solute_hidden_size = num_features + 1 if num_solute_layers == 0 else solute_hidden_size
+        solute_modules = _build_mlp(num_features + 1, branch_hidden_size, activation_fxn, num_solute_layers)
 
         # solvent - temperature is concatenated to the input features
-        solvent_modules = _build_mlp(num_features + 1, solvent_hidden_size, activation_fxn, num_solvent_layers)
-        solvent_hidden_size = num_features + 1 if num_solvent_layers == 0 else solvent_hidden_size
+        solvent_modules = _build_mlp(num_features + 1, branch_hidden_size, activation_fxn, num_solvent_layers)
+
+        # water - temperature is concatenated to the input features
+        water_modules = _build_mlp(num_features + 1, branch_hidden_size, activation_fxn, num_water_layers)
 
         # optionally bound input
         if input_activation == "clamp3":
@@ -170,47 +151,25 @@ class fastpropSolubility(_fastprop):
         # assemble modules (if empty, just passes input through)
         self.solute_representation_module = torch.nn.Sequential(*solute_modules)
         self.solvent_representation_module = torch.nn.Sequential(*solvent_modules)
+        self.water_representation_module = torch.nn.Sequential(*water_modules)
 
         # interaction module
-        interaction_modules = []
-        if interaction_operation == "concatenation":  # size increases if concatenated
-            num_interaction_features = solvent_hidden_size + solute_hidden_size + 1  # plus temperature
-            interaction_modules.append(Concatenation())
-        elif interaction_operation == "pairwisemax":
-            num_interaction_features = solute_hidden_size + 1
-            interaction_modules.append(PairwiseMax())
-        else:
-            if solute_hidden_size != solvent_hidden_size:
-                raise TypeError(
-                    f"Invalid choice of interaction ({interaction_operation}) for mis-matched solute/solvent"
-                    f" embedding sizes {solute_hidden_size}/{solvent_hidden_size}."
-                )
-            num_interaction_features = solute_hidden_size + 1  # plus temperature
-            if interaction_operation == "multiplication":
-                interaction_modules.append(Multiplication())
-            elif interaction_operation == "subtraction":
-                interaction_modules.append(Subtraction())
-            else:
-                raise TypeError(f"Unknown interaction operation '{interaction_operation}'!")
-        interaction_modules += _build_mlp(num_interaction_features, interaction_hidden_size + 1, activation_fxn, num_interaction_layers)
+        interaction_modules = [Addition()]
+        interaction_modules += _build_mlp(branch_hidden_size + 1, interaction_hidden_size + 1, activation_fxn, num_interaction_layers)
         self.interaction_module = torch.nn.Sequential(*interaction_modules)
 
         # readout
-        if AQ_ONLY:
-            self.readout = torch.nn.Linear(solute_hidden_size, 1)
-        else:
-            self.readout = torch.nn.Linear(num_interaction_features if num_interaction_layers == 0 else interaction_hidden_size + 1, 1)
+        self.readout = torch.nn.Linear(interaction_hidden_size + 1, 1)
         self.save_hyperparameters()
 
     def forward(self, batch):
-        solute_features, solvent_features, temperature = batch
+        solute_features, solvent_features, temperature, is_water = batch
         solute_representation = self.solute_representation_module(torch.cat((solute_features, temperature), dim=1))
-        if not AQ_ONLY:
-            solvent_representation = self.solvent_representation_module(torch.cat((solvent_features, temperature), dim=1))
-            output = self.interaction_module((solute_representation, solvent_representation, temperature))
-            y_hat = self.readout(output)
-        else:
-            y_hat = self.readout(solute_representation)
+        solvent_representation = self.solvent_representation_module(torch.cat((solvent_features, temperature), dim=1))
+        water_features = solvent_features * is_water
+        water_representation = self.water_representation_module(torch.cat((water_features, temperature), dim=1))
+        output = self.interaction_module((solute_representation, solvent_representation, water_representation, temperature))
+        y_hat = self.readout(output)
         return y_hat
 
     def predict_step(self, batch):
@@ -242,12 +201,12 @@ class fastpropSolubility(_fastprop):
         if err_msg:
             raise RuntimeError("Missing scaler statistics!\n" + err_msg)
 
-        solute_features, solvent_features, temperature = batch[0]  # batch 1 is solubility
+        solute_features, solvent_features, temperature, is_water = batch[0]  # batch 1 is solubility
         solute_features = standard_scale(solute_features, self.solute_means, self.solute_vars)
         solvent_features = standard_scale(solvent_features, self.solvent_means, self.solvent_vars)
         temperature = standard_scale(temperature, self.temperature_means, self.temperature_vars)
         with torch.inference_mode():
-            logits = self.forward((solute_features, solvent_features, temperature))
+            logits = self.forward((solute_features, solvent_features, temperature, is_water))
         return inverse_standard_scale(logits, self.target_means, self.target_vars)
 
 
@@ -256,22 +215,20 @@ if __name__ == "__main__":
     solute = torch.rand((4, 100))
     solvent = torch.rand((4, 100))
     temperature = torch.rand((4, 1))
-    batch = (solute, solvent, temperature)
+    is_water = torch.tensor([[1], [0], [1], [1]])
+    batch = (solute, solvent, temperature, is_water)
 
     model = fastpropSolubility(
-        num_solute_layers=3,
-        solute_hidden_size=1_400,
-        num_solvent_layers=1,
-        solvent_hidden_size=200,
-        num_interaction_layers=2,
-        interaction_hidden_size=2_400,
-        interaction_operation="pairwisemax",
-        activation_fxn="relu",
-        input_activation="clamp3",
-        num_features=100,
-        learning_rate=0.01,
-        target_means=None,
-        target_vars=None,
+        num_solute_layers = 1,
+        num_solvent_layers = 3,
+        num_water_layers = 2,
+        branch_hidden_size = 20,
+        num_interaction_layers = 4,
+        interaction_hidden_size = 10,
+        activation_fxn = "relu6",
+        input_activation = None,
+        num_features = 100,
+        learning_rate = 0.0001,
     )
     print(model)
     print(model(batch))

@@ -32,10 +32,8 @@ fastprop_data: pd.DataFrame = get_descs(all_data)
 _dest = Path("vermeire")
 if not Path.exists(_dest):
     Path.mkdir(_dest)
+fastprop_data.insert(0, 'source', all_data['source'])
 fastprop_data.to_csv(_dest / "prepared_data.csv")
 fastprop_data[["temperature"] + DESCRIPTOR_COLUMNS].to_csv(_dest / "features.csv")
 fastprop_data[["solute_smiles", "solvent_smiles", "logS"]].to_csv(_dest / "targets.csv")
 fastprop_data[["temperature"]].to_csv(_dest / "chemprop_features.csv")
-
-fastprop_data[fastprop_data["solvent_smiles"].eq("O")].reset_index().to_csv(_dest / "vermeire_aq.csv")
-fastprop_data[~fastprop_data["solvent_smiles"].eq("O")].reset_index().to_csv(_dest / "vermeire_nonaq.csv")

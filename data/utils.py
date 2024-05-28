@@ -20,6 +20,9 @@ def get_descs(src_df: pd.DataFrame):
     # map smiles -> descriptors
     smiles_to_descs: dict = {smiles: desc for smiles, desc in zip(unique_smiles, descs)}
     fastprop_data: pd.DataFrame = src_df[["solute_smiles", "solvent_smiles", "logS", "temperature"]]
+    # insert column indicating if something is in water or not
+    fastprop_data.insert(4, 'is_water', fastprop_data['solvent_smiles'].apply(lambda s: int(s in {'O', '[OH2]', '[H]O[H]'})))
+    # add the descriptors
     fastprop_data: pd.DataFrame = fastprop_data.reindex(columns=fastprop_data.columns.tolist() + DESCRIPTOR_COLUMNS)
     fastprop_data[DESCRIPTOR_COLUMNS] = [
         np.hstack((smiles_to_descs[solute], smiles_to_descs[solvent]))

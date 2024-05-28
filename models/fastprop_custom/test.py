@@ -23,6 +23,7 @@ SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
 
 
 def parity_plot(truth, prediction, title, out_fpath, stat_str):
+    plt.clf()
     plt.scatter(truth, prediction, alpha=0.1)
     plt.xlabel("truth")
     plt.ylabel("prediction")
@@ -52,25 +53,19 @@ def test_ensemble(checkpoint_dir: Path):
             Path("boobier/acetone_solubility_data_features.csv"),
             Path("boobier/benzene_solubility_data_features.csv"),
             Path("boobier/ethanol_solubility_data_features.csv"),
-            # Path("llompart/llompart_aqsoldb.csv"),
-            # Path("llompart/llompart_ochem.csv"),
-            # Path("krasnov/bigsol_downsample_aq_features.csv"),
-            Path("krasnov/bigsol_downsample_nonaq_features.csv"),
-            # Path("vermeire/prepared_data.csv"),
-            # Path("vermeire/vermeire_aq.csv"),
-            Path("vermeire/vermeire_nonaq.csv"),
+            Path("llompart/llompart_aqsoldb.csv"),
+            Path("llompart/llompart_ochem.csv"),
+            Path("krasnov/bigsol_downsample_features.csv"),
+            Path("vermeire/prepared_data.csv"),
         ),
         (
             "boobier_acetone",
             "boobier_benzene",
             "boobier_ethanol",
-            # "llompart_aqsoldb",
-            # "llompart_ochem",
-            # "krasnov_downsample_aq",
-            "krasnov_downsample_nonaq",
-            # "vermeire",
-            # "vermeire_aq",
-            "vermeire_nonaq",
+            "llompart_aqsoldb",
+            "llompart_ochem",
+            "krasnov_downsample",
+            "vermeire",
         ),
         strict=True,
     ):
@@ -78,6 +73,7 @@ def test_ensemble(checkpoint_dir: Path):
         df = pd.read_csv(Path("../../data") / holdout_fpath, index_col=0)
         solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
         temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+        is_water = torch.tensor(df["is_water"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
         solute_features = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
         solvent_features = torch.tensor(df[SOLVENT_COLUMNS].to_numpy(), dtype=torch.float32)
         smiles = df[["solvent_smiles", "solute_smiles"]].apply(lambda row: ".".join(row), axis=1).tolist()
@@ -86,6 +82,7 @@ def test_ensemble(checkpoint_dir: Path):
                 solute_features,
                 solvent_features,
                 temperatures,
+                is_water,
                 solubilities,
             ),
             batch_size=len(solubilities),
@@ -121,4 +118,4 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
-    test_ensemble(Path("output/fastprop_1715974127/checkpoints"))
+    test_ensemble(Path("output/fastprop_aqsep_v2/checkpoints"))

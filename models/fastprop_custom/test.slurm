@@ -1,6 +1,6 @@
 #!/bin/bash -l
-#SBATCH -J hopt
-#SBATCH -t 00-16:00:00
+#SBATCH -J test
+#SBATCH -t 00-00:10:00
 #SBATCH -o slurm.%j.out
 #SBATCH -e slurm.%j.err
 #SBATCH -N 1
@@ -14,4 +14,4 @@ source activate fprop
 mkdir -p /state/partition1/user/jburns
 
 cd /home/gridsan/jburns/fastsolv/models/fastprop_custom
-python hopt.py
+CUDA_VISIBLE_DEVICES=0 python test.py

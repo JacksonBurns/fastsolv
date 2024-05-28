@@ -23,18 +23,9 @@ logger = init_logger(__name__)
 
 NUM_REPLICATES = 4
 SCALE_TARGETS = True
-SOLUTE_EXTRAPOLATION = True
+STUDY_SPLIT = True
 RANDOM_SEED = 1701  # the final frontier
-TRAINING_FPATH = Path("vermeire/vermeire_nonaq.csv")
-# one of:
-# Path("boobier/acetone_solubility_data_features.csv")
-# Path("boobier/benzene_solubility_data_features.csv")
-# Path("boobier/ethanol_solubility_data_features.csv")
-# Path("llompart/llompart_aqsoldb.csv")
-# Path("llompart/llompart_ochem.csv")
-# Path("krasnov/bigsol_features.csv")
-# Path("vermeire/vermeire_aq.csv")
-# Path("vermeire/vermeire_nonaq.csv")
+TRAINING_FPATH = Path("vermeire/prepared_data.csv")
 
 SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
 SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
@@ -74,7 +65,7 @@ SCORE_LOOKUP["regression"] = (
 )
 
 
-def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kwargs):
+def train_ensemble(data=None, remove_output=False, **model_kwargs):
     # setup logging and output directories
     _output_dir = Path(f"output/fastprop_{int(datetime.datetime.now(datetime.UTC).timestamp())}")
     os.makedirs(_output_dir, exist_ok=True)
@@ -86,12 +77,14 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
     if data is None:
         df = pd.read_csv(_data_dir / TRAINING_FPATH, index_col=0)
         smiles_df = df[["solute_smiles", "solvent_smiles"]]
+        source_df = df[["source"]]
         solubilities_og = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
         temperatures_og = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
+        is_water_og = torch.tensor(df["is_water"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
         solute_features_og = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
         solvent_features_og = torch.tensor(df[SOLVENT_COLUMNS].to_numpy(), dtype=torch.float32)
     else:
-        solute_features_og, solvent_features_og, temperatures_og, solubilities_og, smiles_df = data
+        solute_features_og, solvent_features_og, temperatures_og, solubilities_og, smiles_df, is_water_og, source_df = data
 
     logger.info(f"Run 'tensorboard --logdir {_output_dir}/tensorboard_logs' to track training progress.")
     random_seed = RANDOM_SEED
@@ -103,13 +96,16 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
         temperatures = temperatures_og.detach().clone()
         solute_features = solute_features_og.detach().clone()
         solvent_features = solvent_features_og.detach().clone()
+        is_water = is_water_og.detach().clone()
 
-        # split the data s.t. model only sees a subset of solutes and solvents
-        if SOLUTE_EXTRAPOLATION:
-            solutes_train, solutes_val, solutes_test = train_val_test_split(pd.unique(smiles_df["solute_smiles"]), random_state=random_seed)
-            train_indexes = smiles_df.index[smiles_df["solute_smiles"].isin(solutes_train)].tolist()
-            val_indexes = smiles_df.index[smiles_df["solute_smiles"].isin(solutes_val)].tolist()
-            test_indexes = smiles_df.index[smiles_df["solute_smiles"].isin(solutes_test)].tolist()
+        # split the data s.t. model only sees a subset of the studies used to aggregate the training data
+        if STUDY_SPLIT:
+            studies_train, studies_val, studies_test = train_val_test_split(pd.unique(source_df["source"]), random_state=random_seed)
+            train_indexes = smiles_df.index[source_df["source"].isin(studies_train)].tolist()
+            val_indexes = smiles_df.index[source_df["source"].isin(studies_val)].tolist()
+            test_indexes = smiles_df.index[source_df["source"].isin(studies_test)].tolist()
+            _total = len(source_df["source"])
+            logger.info(f"train: {len(train_indexes)} ({len(train_indexes)/_total:.0%}) validation: {len(val_indexes)} ({len(val_indexes)/_total:.0%}) test: {len(test_indexes)} ({len(test_indexes)/_total:.0%})")
         else:
             train_indexes, val_indexes, test_indexes = train_val_test_split(np.arange(len(smiles_df)), random_state=random_seed)
 
@@ -141,6 +137,7 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
                 solute_features[train_indexes],
                 solvent_features[train_indexes],
                 temperatures[train_indexes],
+                is_water[train_indexes],
                 solubilities[train_indexes],
             ),
             shuffle=True,
@@ -151,6 +148,7 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
                 solute_features[val_indexes],
                 solvent_features[val_indexes],
                 temperatures[val_indexes],
+                is_water[val_indexes],
                 solubilities[val_indexes],
             ),
         )
@@ -159,6 +157,7 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
                 solute_features[test_indexes],
                 solvent_features[test_indexes],
                 temperatures[test_indexes],
+                is_water[test_indexes],
                 solubilities[test_indexes],
             ),
             batch_size=10_000,
@@ -195,17 +194,10 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
 
 
 if __name__ == "__main__":
+    hopt_params={'activation_fxn': 'sigmoid', 'input_activation': 'sigmoid', 'interaction_hidden_size': 900, 'branch_hidden_size': 1100, 'num_interaction_layers': 4, 'num_solute_layers': 1, 'num_solvent_layers': 2, 'num_water_layers': 3}
     train_ensemble(
         remove_output=False,
-        num_solute_layers=2,
-        solute_hidden_size=900,
-        num_solvent_layers=2,
-        solvent_hidden_size=900,
-        num_interaction_layers=2,
-        interaction_hidden_size=2000,
-        input_activation="clamp3",
-        interaction_operation="multiplication",
-        activation_fxn="leakyrelu",
-        num_features=1613,
-        learning_rate=0.0001,
+        num_features = 1613,
+        learning_rate = 0.00001,
+        **hopt_params,
     )
