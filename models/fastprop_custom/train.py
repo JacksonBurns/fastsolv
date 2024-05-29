@@ -23,7 +23,7 @@ from fastprop.model import train_and_test
 from lightning.pytorch import seed_everything
 
 from data import SolubilityDataset
-from model import fastpropSolubility
+from model import fastpropSolubility, ENABLE_BATCHNORM
 
 logger = init_logger(__name__)
 
@@ -146,7 +146,7 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                 solubilities[train_indexes],
             ),
             shuffle=True,
-            drop_last=True,
+            drop_last=ENABLE_BATCHNORM,
         )
         val_dataloader = fastpropDataLoader(
             SolubilityDataset(
@@ -179,7 +179,7 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
             temperature_vars=temperature_vars,
         )
         logger.info("Model architecture:\n{%s}", str(model))
-        test_results, validation_results = train_and_test(_output_dir, model, train_dataloader, val_dataloader, test_dataloader, 100, 10)
+        test_results, validation_results = train_and_test(_output_dir, model, train_dataloader, val_dataloader, test_dataloader, 100, 20)
         all_test_results.append(test_results[0])
         all_validation_results.append(validation_results[0])
 
