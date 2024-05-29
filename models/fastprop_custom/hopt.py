@@ -24,9 +24,9 @@ def define_by_run_func(trial):
     trial.suggest_categorical("activation_fxn", ("relu", "leakyrelu"))
     trial.suggest_int("interaction_hidden_size", 400, 3_400, 200)
     trial.suggest_int("num_interaction_layers", 0, 6, 1)
-    interaction = trial.suggest_categorical("interaction_operation", ("concatenation", "multiplication", "subtraction", "pairwisemax", "addition"))
-    # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation or pairwisemax
-    if interaction in {"concatenation", "pairwisemax"}:
+    interaction = trial.suggest_categorical("interaction_operation", ("concatenation", "multiplication", "subtraction", "addition"))
+    # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation
+    if interaction == "concatenation":
         trial.suggest_int("num_solute_layers", 0, 6, 1)
         trial.suggest_int("solute_hidden_size", 200, 3_000, 200)
         trial.suggest_int("num_solvent_layers", 0, 6, 1)
@@ -109,7 +109,7 @@ def _hopt_objective(
         data=(solute_features, solvent_features, temperatures, solubilities, metadata_df),
         remove_output=True,
         num_features=1_613,
-        learning_rate=0.0001,
+        learning_rate=0.001,
         **trial,
     )
     return {"mse": validation_results_df.describe().at["mean", "validation_mse_scaled_loss"]}

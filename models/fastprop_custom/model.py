@@ -99,7 +99,6 @@ class fastpropSolubility(_fastprop):
             "concatenation",
             "multiplication",
             "subtraction",
-            "pairwisemax",
             "addition",
         ] = "concatenation",
         activation_fxn: Literal["relu", "leakyrelu"] = "relu",
@@ -140,9 +139,11 @@ class fastpropSolubility(_fastprop):
 
         # solute - temperature is concatenated to the input features
         solute_modules = _build_mlp(num_features + 1, solute_hidden_size, activation_fxn, num_solute_layers)
+        solute_hidden_size = solute_hidden_size if num_solute_layers > 0 else num_features + 1
 
         # solvent - temperature is concatenated to the input features
         solvent_modules = _build_mlp(num_features + 1, solvent_hidden_size, activation_fxn, num_solvent_layers)
+        solvent_hidden_size = solvent_hidden_size if num_solvent_layers > 0 else num_features + 1
 
         # optionally bound input
         if input_activation == "clamp3":
@@ -179,11 +180,11 @@ class fastpropSolubility(_fastprop):
                 interaction_modules.append(Addition())
             else:
                 raise TypeError(f"Unknown interaction operation '{interaction_operation}'!")
-        interaction_modules += _build_mlp(num_interaction_features + 1, interaction_hidden_size + 1, activation_fxn, num_interaction_layers)
+        interaction_modules += _build_mlp(num_interaction_features, interaction_hidden_size, activation_fxn, num_interaction_layers)
         self.interaction_module = torch.nn.Sequential(*interaction_modules)
 
         # readout
-        self.readout = torch.nn.Linear(interaction_hidden_size + 1, 1)
+        self.readout = torch.nn.Linear(num_interaction_features if num_interaction_layers == 0 else interaction_hidden_size, 1)
         self.save_hyperparameters()
 
     def forward(self, batch):
