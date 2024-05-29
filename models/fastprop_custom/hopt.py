@@ -14,6 +14,7 @@ from ray.tune.search.optuna import OptunaSearch
 from train import SOLUTE_COLUMNS, SOLVENT_COLUMNS, train_ensemble
 
 logger = init_logger(__name__)
+ray.init(_temp_dir='/state/partition1/user/jburns', num_cpus=40, num_gpus=2)
 
 NUM_HOPT_TRIALS = 1024
 
