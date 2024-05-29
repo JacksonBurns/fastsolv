@@ -23,6 +23,7 @@ SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
 
 
 def parity_plot(truth, prediction, title, out_fpath, stat_str):
+    plt.clf()
     plt.scatter(truth, prediction, alpha=0.1)
     plt.xlabel("truth")
     plt.ylabel("prediction")
@@ -66,6 +67,7 @@ def test_ensemble(checkpoint_dir: Path):
             "krasnov_downsample",
             "vermeire",
         ),
+        strict=True,
     ):
         # load the holdout data
         df = pd.read_csv(Path("../../data") / holdout_fpath, index_col=0)
@@ -114,4 +116,4 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
-    test_ensemble(Path("output/fastprop_1715878290/checkpoints"))
+    test_ensemble(Path("output/fastprop_aqsepv3_optimal/checkpoints"))

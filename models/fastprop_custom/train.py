@@ -12,7 +12,13 @@ import torch
 from astartes import train_val_test_split
 from fastprop.data import fastpropDataLoader, standard_scale
 from fastprop.defaults import ALL_2D, _init_loggers, init_logger
-from fastprop.metrics import SCORE_LOOKUP, mean_absolute_error_score, root_mean_squared_error_loss, weighted_mean_absolute_percentage_error_score, r2_score
+from fastprop.metrics import (
+    SCORE_LOOKUP,
+    mean_absolute_error_score,
+    root_mean_squared_error_loss,
+    weighted_mean_absolute_percentage_error_score,
+    r2_score,
+)
 from fastprop.model import train_and_test
 from lightning.pytorch import seed_everything
 
@@ -21,18 +27,11 @@ from model import fastpropSolubility
 
 logger = init_logger(__name__)
 
-NUM_REPLICATES = 4
+NUM_REPLICATES = 6
 SCALE_TARGETS = True
-SOLUTE_EXTRAPOLATION = True
+STUDY_SPLIT = True
 RANDOM_SEED = 1701  # the final frontier
 TRAINING_FPATH = Path("vermeire/prepared_data.csv")
-# one of:
-# Path("boobier/acetone_solubility_data_features.csv"),
-# Path("boobier/benzene_solubility_data_features.csv"),
-# Path("boobier/ethanol_solubility_data_features.csv"),
-# Path("llompart/llompart_features.csv"),
-# Path("krasnov/bigsol_features.csv"),
-# Path("vermeire/prepared_data.csv"),
 
 SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
 SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
@@ -53,8 +52,8 @@ def parity_plot(truth, prediction, title, out_fpath):
     min_val = min(np.min(truth), np.min(prediction))
     max_val = max(np.max(truth), np.max(prediction))
     plt.plot([min_val, max_val], [min_val, max_val], color="black", linestyle="-")
-    plt.plot([min_val, max_val], [min_val+1, max_val+1], color="red", linestyle="--", alpha=0.25)
-    plt.plot([min_val, max_val], [min_val-1, max_val-1], color="red", linestyle="--", alpha=0.25)
+    plt.plot([min_val, max_val], [min_val + 1, max_val + 1], color="red", linestyle="--", alpha=0.25)
+    plt.plot([min_val, max_val], [min_val - 1, max_val - 1], color="red", linestyle="--", alpha=0.25)
     plt.ylim(min_val - 1, max_val + 1)
     plt.xlim(min_val - 1, max_val + 1)
     plt.title(title)
@@ -72,7 +71,7 @@ SCORE_LOOKUP["regression"] = (
 )
 
 
-def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kwargs):
+def train_ensemble(data=None, remove_output=False, **model_kwargs):
     # setup logging and output directories
     _output_dir = Path(f"output/fastprop_{int(datetime.datetime.now(datetime.UTC).timestamp())}")
     os.makedirs(_output_dir, exist_ok=True)
@@ -83,13 +82,13 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
     # load the training data
     if data is None:
         df = pd.read_csv(_data_dir / TRAINING_FPATH, index_col=0)
-        smiles_df = df[["solute_smiles", "solvent_smiles"]]
+        metadata_df = df[["solute_smiles", "solvent_smiles", "source"]]
         solubilities_og = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
         temperatures_og = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
         solute_features_og = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
         solvent_features_og = torch.tensor(df[SOLVENT_COLUMNS].to_numpy(), dtype=torch.float32)
     else:
-        solute_features_og, solvent_features_og, temperatures_og, solubilities_og, smiles_df = data
+        solute_features_og, solvent_features_og, temperatures_og, solubilities_og, metadata_df  = data
 
     logger.info(f"Run 'tensorboard --logdir {_output_dir}/tensorboard_logs' to track training progress.")
     random_seed = RANDOM_SEED
@@ -102,14 +101,19 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
         solute_features = solute_features_og.detach().clone()
         solvent_features = solvent_features_og.detach().clone()
 
-        # split the data s.t. model only sees a subset of solutes and solvents
-        if SOLUTE_EXTRAPOLATION:
-            solutes_train, solutes_val, solutes_test = train_val_test_split(pd.unique(smiles_df["solute_smiles"]), random_state=random_seed)
-            train_indexes = smiles_df.index[smiles_df["solute_smiles"].isin(solutes_train)].tolist()
-            val_indexes = smiles_df.index[smiles_df["solute_smiles"].isin(solutes_val)].tolist()
-            test_indexes = smiles_df.index[smiles_df["solute_smiles"].isin(solutes_test)].tolist()
+        # split the data s.t. model only sees a subset of the studies used to aggregate the training data
+        if STUDY_SPLIT:
+            studies_train, studies_val, studies_test = train_val_test_split(pd.unique(metadata_df["source"]), random_state=random_seed)
+            train_indexes = metadata_df.index[metadata_df["source"].isin(studies_train)].tolist()
+            val_indexes = metadata_df.index[metadata_df["source"].isin(studies_val)].tolist()
+            test_indexes = metadata_df.index[metadata_df["source"].isin(studies_test)].tolist()
+            _total = len(metadata_df["source"])
+            logger.info(
+                f"train: {len(train_indexes)} ({len(train_indexes)/_total:.0%}) validation:"
+                f"{len(val_indexes)} ({len(val_indexes)/_total:.0%}) test: {len(test_indexes)} ({len(test_indexes)/_total:.0%})"
+            )
         else:
-            train_indexes, val_indexes, test_indexes = train_val_test_split(np.arange(len(smiles_df)), random_state=random_seed)
+            train_indexes, val_indexes, test_indexes = train_val_test_split(np.arange(len(metadata_df)), random_state=random_seed)
 
         # scaling
         solute_features[train_indexes], solute_feature_means, solute_feature_vars = standard_scale(solute_features[train_indexes])
@@ -142,6 +146,7 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
                 solubilities[train_indexes],
             ),
             shuffle=True,
+            drop_last=True,
         )
         val_dataloader = fastpropDataLoader(
             SolubilityDataset(
@@ -192,16 +197,10 @@ def train_ensemble(data=None, remove_output=False, run_holdout=False, **model_kw
 
 
 if __name__ == "__main__":
+    hopt_params = params = {}
     train_ensemble(
         remove_output=False,
-        num_solute_layers=3,
-        solute_hidden_size=1_800,
-        num_solvent_layers=3,
-        solvent_hidden_size=1_800,
-        num_interaction_layers=1,
-        interaction_hidden_size=2_300,
-        interaction_operation="multiplication",
-        activation_fxn="leakyrelu",
         num_features=1613,
-        learning_rate=0.0001,
+        learning_rate=0.00001,
+        **hopt_params,
     )

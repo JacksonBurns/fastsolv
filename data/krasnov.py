@@ -88,4 +88,4 @@ fastprop_data = get_descs(bigsol_data)
 _dest = Path("krasnov")
 if not Path.exists(_dest):
     Path.mkdir(_dest)
-fastprop_data.to_csv(_dest / "bigsol_downsample_features.csv")
+fastprop_data.reset_index().to_csv(_dest / "bigsol_downsample_features.csv")

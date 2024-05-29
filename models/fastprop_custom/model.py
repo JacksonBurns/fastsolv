@@ -31,6 +31,11 @@ class Subtraction(torch.nn.Module):
         return torch.cat((batch[0] - batch[1], batch[2]), dim=1)
 
 
+class Addition(torch.nn.Module):
+    def forward(self, batch):
+        return torch.cat((batch[0] + batch[1], batch[2]), dim=1)
+
+
 # just had a lecture about transformers, this is kinda like something from that, i guess (not really)
 class PairwiseMax(torch.nn.Module):
     def forward(self, batch):
@@ -39,29 +44,25 @@ class PairwiseMax(torch.nn.Module):
         return torch.cat((maxes, batch[2]), dim=1)
 
 
-class ReLUn(torch.nn.Module):
-    def __init__(self) -> None:
+# inputs are normally distributed (by our scaling) so clamping at n
+# is like applying a n-sigma cutoff, i.e. anything else is an outlier
+class ClampN(torch.nn.Module):
+    def __init__(self, n: float) -> None:
         super().__init__()
-        self.n = torch.nn.Parameter(torch.randn(()))
+        self.n = n
 
     def forward(self, batch: torch.Tensor):
-        return torch.nn.functional.relu(batch).minimum(self.n)
+        return torch.clamp(batch, min=-self.n, max=self.n)
 
-
-class WideTanh(torch.nn.Module):
-    def __init__(self, width: float = 3.14) -> None:
-        super().__init__()
-        self.width = width
-
-    def forward(self, batch: torch.Tensor):
-        return torch.nn.functional.tanh(batch / self.width)
+    def extra_repr(self) -> str:
+        return f"n={self.n}"
 
 
 def _build_mlp(input_size, hidden_size, act_fun, num_layers):
     modules = []
     for i in range(num_layers):
         modules.append(torch.nn.Linear(input_size if i == 0 else hidden_size, hidden_size))
-        if i < num_layers - 1:  # no activation after last layer
+        if (num_layers == 1) or (i < num_layers - 1):  # no activation after last layer, unless perceptron
             if ENABLE_SNN:
                 modules.append(torch.nn.SELU())
                 if ENABLE_DROPOUT:
@@ -77,14 +78,12 @@ def _build_mlp(input_size, hidden_size, act_fun, num_layers):
                     modules.append(torch.nn.ReLU6())
                 elif act_fun == "leakyrelu":
                     modules.append(torch.nn.LeakyReLU())
-                elif act_fun == "relun":
-                    modules.append(ReLUn())
                 else:
                     raise TypeError(f"What is {act_fun}?")
-                if ENABLE_DROPOUT:
-                    modules.append(torch.nn.Dropout())
                 if ENABLE_BATCHNORM:
                     modules.append(torch.nn.BatchNorm1d(hidden_size))
+                if ENABLE_DROPOUT:
+                    modules.append(torch.nn.Dropout())
     return modules
 
 
@@ -97,8 +96,15 @@ class fastpropSolubility(_fastprop):
         solvent_hidden_size: int = 1_000,
         num_interaction_layers: int = 0,
         interaction_hidden_size: int = 1_000,
-        interaction_operation: Literal["concatenation", "multiplication", "subtraction", "pairwisemax"] = "concatenation",
-        activation_fxn: Literal["relu", "relu6", "sigmoid", "leakyrelu", "relun", "tanh"] = "relu6",
+        interaction_operation: Literal[
+            "concatenation",
+            "multiplication",
+            "subtraction",
+            "pairwisemax",
+            "addition",
+        ] = "concatenation",
+        activation_fxn: Literal["relu", "leakyrelu"] = "relu",
+        input_activation: Literal["sigmoid", "tanh", "clamp3"] = "sigmoid",
         num_features: int = 1613,
         learning_rate: float = 0.0001,
         target_means: torch.Tensor = None,
@@ -135,16 +141,20 @@ class fastpropSolubility(_fastprop):
 
         # solute - temperature is concatenated to the input features
         solute_modules = _build_mlp(num_features + 1, solute_hidden_size, activation_fxn, num_solute_layers)
-        # bound input for unbounded loss functions
-        if ENABLE_INPUT_ACTIVATION and activation_fxn in {"relu", "leakyrelu"}:
-            solute_modules.insert(0, WideTanh())
-        solute_hidden_size = num_features + 1 if num_solute_layers == 0 else solute_hidden_size
 
         # solvent - temperature is concatenated to the input features
         solvent_modules = _build_mlp(num_features + 1, solvent_hidden_size, activation_fxn, num_solvent_layers)
-        if ENABLE_INPUT_ACTIVATION and activation_fxn in {"relu", "leakyrelu"}:
-            solvent_modules.insert(0, WideTanh())
-        solvent_hidden_size = num_features + 1 if num_solvent_layers == 0 else solvent_hidden_size
+
+        # optionally bound input
+        if input_activation == "clamp3":
+            solute_modules.insert(0, ClampN(n=3.0))
+            solvent_modules.insert(0, ClampN(n=3.0))
+        elif input_activation == "sigmoid":
+            solute_modules.insert(0, torch.nn.Sigmoid())
+            solvent_modules.insert(0, torch.nn.Sigmoid())
+        elif input_activation == "tanh":
+            solute_modules.insert(0, torch.nn.Tanh())
+            solvent_modules.insert(0, torch.nn.Tanh())
 
         # assemble modules (if empty, just passes input through)
         self.solute_representation_module = torch.nn.Sequential(*solute_modules)
@@ -155,9 +165,6 @@ class fastpropSolubility(_fastprop):
         if interaction_operation == "concatenation":  # size increases if concatenated
             num_interaction_features = solvent_hidden_size + solute_hidden_size + 1  # plus temperature
             interaction_modules.append(Concatenation())
-        elif interaction_operation == "pairwisemax":
-            num_interaction_features = solute_hidden_size + 1
-            interaction_modules.append(PairwiseMax())
         else:
             if solute_hidden_size != solvent_hidden_size:
                 raise TypeError(
@@ -169,13 +176,15 @@ class fastpropSolubility(_fastprop):
                 interaction_modules.append(Multiplication())
             elif interaction_operation == "subtraction":
                 interaction_modules.append(Subtraction())
+            elif interaction_operation == "addition":
+                interaction_modules.append(Addition())
             else:
                 raise TypeError(f"Unknown interaction operation '{interaction_operation}'!")
-        interaction_modules += _build_mlp(num_interaction_features, interaction_hidden_size + 1, activation_fxn, num_interaction_layers)
+        interaction_modules += _build_mlp(num_interaction_features + 1, interaction_hidden_size + 1, activation_fxn, num_interaction_layers)
         self.interaction_module = torch.nn.Sequential(*interaction_modules)
 
         # readout
-        self.readout = torch.nn.Linear(num_interaction_features if num_interaction_layers == 0 else interaction_hidden_size + 1, 1)
+        self.readout = torch.nn.Linear(interaction_hidden_size + 1, 1)
         self.save_hyperparameters()
 
     def forward(self, batch):

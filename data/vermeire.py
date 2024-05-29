@@ -32,6 +32,7 @@ fastprop_data: pd.DataFrame = get_descs(all_data)
 _dest = Path("vermeire")
 if not Path.exists(_dest):
     Path.mkdir(_dest)
+fastprop_data.insert(0, 'source', all_data['source'])
 fastprop_data.to_csv(_dest / "prepared_data.csv")
 fastprop_data[["temperature"] + DESCRIPTOR_COLUMNS].to_csv(_dest / "features.csv")
 fastprop_data[["solute_smiles", "solvent_smiles", "logS"]].to_csv(_dest / "targets.csv")

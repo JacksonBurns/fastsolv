@@ -4,7 +4,6 @@ from typing import Dict
 from pathlib import Path
 
 import pandas as pd
-import psutil
 import ray
 import torch
 from fastprop.defaults import _init_loggers, init_logger
@@ -16,35 +15,34 @@ from train import SOLUTE_COLUMNS, SOLVENT_COLUMNS, train_ensemble
 
 logger = init_logger(__name__)
 
-NUM_HOPT_TRIALS = 128
-ENABLE_BRANCHES = True
+NUM_HOPT_TRIALS = 1024
 
 
 def define_by_run_func(trial):
-    trial.suggest_categorical("act_fun", ("tanh", "relu", "relu6", "sigmoid", "leakyrelu"))  # , "relun"
-    trial.suggest_int("interaction_hidden_size", 400, 3_400, 100)
-    trial.suggest_int("num_interaction_layers", 0, 4, 1)
-    interaction = trial.suggest_categorical("interaction", ("concatenation", "multiplication", "subtraction"))  # "pairwisemax",
-
-    if ENABLE_BRANCHES:
-        # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation or pairwisemax
-        if interaction in {"concatenation", "pairwisemax"}:
-            trial.suggest_int("solute_layers", 0, 4, 1)
-            trial.suggest_int("solute_hidden_size", 200, 2_200, 100)
-            trial.suggest_int("solvent_layers", 0, 4, 1)
-            trial.suggest_int("solvent_hidden_size", 200, 2_200, 100)
-        else:
-            solute_layers = trial.suggest_int("solute_layers", 0, 4, 1)
-            if solute_layers == 0:
-                trial.suggest_int("solvent_layers", 0, 0)
-                trial.suggest_int("solute_hidden_size", 0, 0)
-                trial.suggest_int("solvent_hidden_size", 0, 0)
-            else:
-                trial.suggest_int("solvent_layers", 1, 4, 1)
-                matched_hidden_size = trial.suggest_int("solute_hidden_size", 200, 2_200, 100)
-                trial.suggest_int("solvent_hidden_size", matched_hidden_size, matched_hidden_size)
+    trial.suggest_categorical("input_activation", ("sigmoid", "tanh", "clamp3"))
+    trial.suggest_categorical("activation_fxn", ("relu", "leakyrelu"))
+    trial.suggest_int("interaction_hidden_size", 400, 3_400, 200)
+    trial.suggest_int("num_interaction_layers", 0, 6, 1)
+    interaction = trial.suggest_categorical(
+        "interaction_operation",
+        ("concatenation", "multiplication", "subtraction", "pairwisemax", "addition")
+    )
+    # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation or pairwisemax
+    if interaction in {"concatenation", "pairwisemax"}:
+        trial.suggest_int("num_solute_layers", 0, 6, 1)
+        trial.suggest_int("solute_hidden_size", 200, 3_000, 200)
+        trial.suggest_int("num_solvent_layers", 0, 6, 1)
+        trial.suggest_int("solvent_hidden_size", 200, 3_000, 200)
     else:
-        return {"solute_layers": 0, "solute_hidden_size": 0, "solvent_layers": 0, "solvent_hidden_size": 0}
+        solute_layers = trial.suggest_int("num_solute_layers", 0, 6, 1)
+        if solute_layers == 0:
+            trial.suggest_int("num_solvent_layers", 0, 0)
+            trial.suggest_int("solute_hidden_size", 0, 0)
+            trial.suggest_int("solvent_hidden_size", 0, 0)
+        else:
+            trial.suggest_int("num_solvent_layers", 1, 6, 1)
+            matched_hidden_size = trial.suggest_int("solute_hidden_size", 200, 3_000, 200)
+            trial.suggest_int("solvent_hidden_size", matched_hidden_size, matched_hidden_size)
 
 
 def main():
@@ -55,7 +53,7 @@ def main():
 
     # load the data
     df = pd.read_csv(Path("../../data/vermeire/prepared_data.csv"), index_col=0)
-    smiles_df = df[["solute_smiles", "solvent_smiles"]]
+    metadata_df = df[["solute_smiles", "solvent_smiles", "source"]]
     solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
     temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
     solute_features = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
@@ -68,7 +66,7 @@ def main():
     temperatures_ref = ray.put(temperatures)
     solute_features_ref = ray.put(solute_features)
     solvent_features_ref = ray.put(solvent_features)
-    smiles_df_ref = ray.put(smiles_df)
+    metadata_df_ref = ray.put(metadata_df)
     tuner = tune.Tuner(
         tune.with_resources(
             lambda trial: _hopt_objective(
@@ -77,13 +75,13 @@ def main():
                 temperatures_ref,
                 solute_features_ref,
                 solvent_features_ref,
-                smiles_df_ref,
+                metadata_df_ref,
             ),
-            resources={"gpu": 1, "cpu": psutil.cpu_count()},
+            resources={"gpu": 1, "cpu": 20},
         ),
         tune_config=tune.TuneConfig(
             search_alg=algo,
-            max_concurrent_trials=1,
+            max_concurrent_trials=2,
             num_samples=NUM_HOPT_TRIALS,
             metric=metric,
             mode="min",
@@ -102,27 +100,19 @@ def _hopt_objective(
     temperatures_ref,
     solute_features_ref,
     solvent_features_ref,
-    smiles_df_ref,
+    metadata_df_ref,
 ) -> Dict[str, float]:
     solubilities = ray.get(solubilites_ref)
     temperatures = ray.get(temperatures_ref)
     solute_features = ray.get(solute_features_ref)
     solvent_features = ray.get(solvent_features_ref)
-    smiles_df = ray.get(smiles_df_ref)
+    metadata_df = ray.get(metadata_df_ref)
     validation_results_df, _ = train_ensemble(
-        data=(solute_features, solvent_features, temperatures, solubilities, smiles_df),
+        data=(solute_features, solvent_features, temperatures, solubilities, metadata_df),
         remove_output=True,
-        run_holdout=False,
-        num_solute_layers=trial["solute_layers"],
-        solute_hidden_size=trial["solute_hidden_size"],
-        num_solvent_layers=trial["solvent_layers"],
-        solvent_hidden_size=trial["solvent_hidden_size"],
-        num_interaction_layers=trial["num_interaction_layers"],
-        interaction_hidden_size=trial["interaction_hidden_size"],
-        interaction_operation=trial["interaction"],
-        activation_fxn=trial["act_fun"],
         num_features=1_613,
         learning_rate=0.0001,
+        **trial,
     )
     return {"mse": validation_results_df.describe().at["mean", "validation_mse_scaled_loss"]}
 
