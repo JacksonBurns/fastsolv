@@ -11,9 +11,8 @@ from fastprop.data import inverse_standard_scale, standard_scale
 from fastprop.model import fastprop as _fastprop
 
 ENABLE_SNN = False
-ENABLE_DROPOUT = False
-ENABLE_BATCHNORM = False
-ENABLE_INPUT_ACTIVATION = True
+ENABLE_DROPOUT = True
+ENABLE_BATCHNORM = True
 
 
 class Concatenation(torch.nn.Module):
