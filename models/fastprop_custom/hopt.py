@@ -23,10 +23,7 @@ def define_by_run_func(trial):
     trial.suggest_categorical("activation_fxn", ("relu", "leakyrelu"))
     trial.suggest_int("interaction_hidden_size", 400, 3_400, 200)
     trial.suggest_int("num_interaction_layers", 0, 6, 1)
-    interaction = trial.suggest_categorical(
-        "interaction_operation",
-        ("concatenation", "multiplication", "subtraction", "pairwisemax", "addition")
-    )
+    interaction = trial.suggest_categorical("interaction_operation", ("concatenation", "multiplication", "subtraction", "pairwisemax", "addition"))
     # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation or pairwisemax
     if interaction in {"concatenation", "pairwisemax"}:
         trial.suggest_int("num_solute_layers", 0, 6, 1)

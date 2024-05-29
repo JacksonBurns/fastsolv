@@ -88,7 +88,7 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
         solute_features_og = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
         solvent_features_og = torch.tensor(df[SOLVENT_COLUMNS].to_numpy(), dtype=torch.float32)
     else:
-        solute_features_og, solvent_features_og, temperatures_og, solubilities_og, metadata_df  = data
+        solute_features_og, solvent_features_og, temperatures_og, solubilities_og, metadata_df = data
 
     logger.info(f"Run 'tensorboard --logdir {_output_dir}/tensorboard_logs' to track training progress.")
     random_seed = RANDOM_SEED
