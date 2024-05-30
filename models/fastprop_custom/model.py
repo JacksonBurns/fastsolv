@@ -12,7 +12,7 @@ from fastprop.model import fastprop as _fastprop
 
 ENABLE_SNN = False
 ENABLE_DROPOUT = True
-ENABLE_BATCHNORM = False
+ENABLE_BATCHNORM = True
 
 
 class Concatenation(torch.nn.Module):

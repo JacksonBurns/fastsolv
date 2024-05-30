@@ -68,7 +68,7 @@ bigsol_data.insert(1, "logS", bigsol_data[["T,K", "Solvent", "Solubility"]].appl
 bigsol_data = bigsol_data.dropna()
 print(len(bigsol_data), "<-- size without un-estimable solvents")
 bigsol_data = bigsol_data.rename(
-    columns={"T,K": "temperature", "SMILES": "solute_smiles", "SMILES_Solvent": "solvent_smiles"}
+    columns={"T,K": "temperature", "SMILES": "solute_smiles", "SMILES_Solvent": "solvent_smiles", "Source": "source"}
 )
 
 
@@ -82,10 +82,12 @@ def _is_one_mol(row):
 bigsol_data = bigsol_data[bigsol_data[["solute_smiles"]].apply(_is_one_mol, axis=1)]
 print(len(bigsol_data), "<-- count after dropping non-single molecule solutes")
 bigsol_data = bigsol_data.reset_index()
+sources = bigsol_data["source"].to_list()
 
 fastprop_data = get_descs(bigsol_data)
 
+fastprop_data.insert(1, "source", sources)
 _dest = Path("krasnov")
 if not Path.exists(_dest):
     Path.mkdir(_dest)
-fastprop_data.reset_index().to_csv(_dest / "bigsol_downsample_features.csv")
+fastprop_data.to_csv(_dest / "bigsol_downsample_features.csv")

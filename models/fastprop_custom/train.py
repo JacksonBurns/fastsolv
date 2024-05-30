@@ -31,7 +31,9 @@ NUM_REPLICATES = 6
 SCALE_TARGETS = True
 STUDY_SPLIT = True
 RANDOM_SEED = 1701  # the final frontier
-TRAINING_FPATH = Path("vermeire/prepared_data.csv")
+TRAINING_FPATH = Path("krasnov/bigsol_downsample_features.csv")
+# or
+# Path("vermeire/prepared_data.csv")
 
 SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
 SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
