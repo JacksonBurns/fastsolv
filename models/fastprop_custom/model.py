@@ -233,6 +233,101 @@ class fastpropSolubility(_fastprop):
         return inverse_standard_scale(logits, self.target_means, self.target_vars)
 
 
+class fastpropAqueousSolubility(_fastprop):
+    def __init__(
+        self,
+        num_solute_layers: int = 0,
+        solute_hidden_size: int = 1_000,
+        activation_fxn: Literal["relu", "leakyrelu"] = "relu",
+        input_activation: Literal["sigmoid", "tanh", "clamp3"] = "sigmoid",
+        num_features: int = 1613,
+        learning_rate: float = 0.0001,
+        target_means: torch.Tensor = None,
+        target_vars: torch.Tensor = None,
+        solute_means: torch.Tensor = None,
+        solute_vars: torch.Tensor = None,
+        temperature_means: torch.Tensor = None,
+        temperature_vars: torch.Tensor = None,
+    ):
+        super().__init__(
+            input_size=num_features,
+            hidden_size=1,  # we will overwrite this
+            fnn_layers=0,  # and this
+            readout_size=1,  # and this
+            num_tasks=1,  # actually equal to len(descriptors), but we don't want to see performance on each
+            learning_rate=learning_rate,
+            problem_type="regression",
+            target_names=[],
+            target_means=target_means,
+            target_vars=target_vars,
+        )
+        del self.fnn
+        del self.readout
+
+        # for later predicting
+        self.register_buffer("solute_means", solute_means)
+        self.register_buffer("solute_vars", solute_vars)
+        self.register_buffer("temperature_means", temperature_means)
+        self.register_buffer("temperature_vars", temperature_vars)
+
+        # solute - temperature is concatenated to the input features
+        solute_modules = _build_mlp(num_features + 1, solute_hidden_size, activation_fxn, num_solute_layers)
+        solute_hidden_size = solute_hidden_size if num_solute_layers > 0 else num_features + 1
+
+        # optionally bound input
+        if input_activation == "clamp3":
+            solute_modules.insert(0, ClampN(n=3.0))
+        elif input_activation == "sigmoid":
+            solute_modules.insert(0, torch.nn.Sigmoid())
+        elif input_activation == "tanh":
+            solute_modules.insert(0, torch.nn.Tanh())
+
+        # assemble modules (if empty, just passes input through)
+        self.solute_representation_module = torch.nn.Sequential(*solute_modules)
+
+        # readout
+        self.readout = torch.nn.Linear(solute_hidden_size, 1)
+        self.save_hyperparameters()
+
+    def forward(self, batch):
+        solute_features, _, temperature = batch
+        latent_rep = self.solute_representation_module(torch.cat((solute_features, temperature), dim=1))
+        y_hat = self.readout(latent_rep)
+        return y_hat
+
+    def predict_step(self, batch):
+        err_msg = ""
+        for stat_obj, stat_name in zip(
+            (
+                self.solute_means,
+                self.solute_vars,
+                self.temperature_means,
+                self.temperature_vars,
+                self.target_means,
+                self.target_vars,
+            ),
+            (
+                "solute_means",
+                "solute_vars",
+                "temperature_means",
+                "temperature_vars",
+                "target_means",
+                "target_vars",
+            ),
+        ):
+            if stat_obj is None:
+                err_msg.append(f"{stat_name} is None!\n")
+        if err_msg:
+            raise RuntimeError("Missing scaler statistics!\n" + err_msg)
+
+        solute_features, _, temperature = batch[0]  # batch 1 is solubility
+        solute_features = standard_scale(solute_features, self.solute_means, self.solute_vars)
+        temperature = standard_scale(temperature, self.temperature_means, self.temperature_vars)
+        with torch.inference_mode():
+            logits = self.forward((solute_features, None, temperature))
+        return inverse_standard_scale(logits, self.target_means, self.target_vars)
+
+
 if __name__ == "__main__":
     # test batch of 4
     solute = torch.rand((4, 100))

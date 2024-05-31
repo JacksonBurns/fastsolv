@@ -23,17 +23,22 @@ from fastprop.model import train_and_test
 from lightning.pytorch import seed_everything
 
 from data import SolubilityDataset
-from model import fastpropSolubility, ENABLE_BATCHNORM
+from model import fastpropAqueousSolubility, fastpropSolubility, ENABLE_BATCHNORM
 
 logger = init_logger(__name__)
 
-NUM_REPLICATES = 6
+NUM_REPLICATES = 4
 SCALE_TARGETS = True
-STUDY_SPLIT = True
+STUDY_SPLIT = True  # None for solvent split, False for random
 RANDOM_SEED = 1701  # the final frontier
-TRAINING_FPATH = Path("krasnov/bigsol_downsample_features.csv")
-# or
+AQ_ONLY = True
+TRAINING_FPATH = Path("vermeire/vermeire_aq.csv")
+# one of:
 # Path("vermeire/prepared_data.csv")
+# Path("krasnov/bigsol_downsample_features.csv")
+# Path("llompart/llompart_aqsoldbc.csv")
+# Path("llompart/aqsoldb_og.csv")
+# Path("vermeire/vermeire_aq.csv")
 
 SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
 SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
@@ -109,13 +114,18 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
             train_indexes = metadata_df.index[metadata_df["source"].isin(studies_train)].tolist()
             val_indexes = metadata_df.index[metadata_df["source"].isin(studies_val)].tolist()
             test_indexes = metadata_df.index[metadata_df["source"].isin(studies_test)].tolist()
-            _total = len(metadata_df["source"])
-            logger.info(
-                f"train: {len(train_indexes)} ({len(train_indexes)/_total:.0%}) validation:"
-                f"{len(val_indexes)} ({len(val_indexes)/_total:.0%}) test: {len(test_indexes)} ({len(test_indexes)/_total:.0%})"
-            )
+        elif STUDY_SPLIT is None:
+            solutes_train, solutes_val, solutes_test = train_val_test_split(pd.unique(metadata_df["solute_smiles"]), random_state=random_seed)
+            train_indexes = metadata_df.index[metadata_df["solute_smiles"].isin(solutes_train)].tolist()
+            val_indexes = metadata_df.index[metadata_df["solute_smiles"].isin(solutes_val)].tolist()
+            test_indexes = metadata_df.index[metadata_df["solute_smiles"].isin(solutes_test)].tolist()
         else:
             train_indexes, val_indexes, test_indexes = train_val_test_split(np.arange(len(metadata_df)), random_state=random_seed)
+        _total = len(metadata_df)
+        logger.info(
+            f"train: {len(train_indexes)} ({len(train_indexes)/_total:.0%}) validation:"
+            f"{len(val_indexes)} ({len(val_indexes)/_total:.0%}) test: {len(test_indexes)} ({len(test_indexes)/_total:.0%})"
+        )
 
         # scaling
         solute_features[train_indexes], solute_feature_means, solute_feature_vars = standard_scale(solute_features[train_indexes])
@@ -169,17 +179,28 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
         )
 
         # initialize the model and train/test
-        model = fastpropSolubility(
-            **model_kwargs,
-            target_means=solubility_means,
-            target_vars=solubility_vars,
-            solute_means=solute_feature_means,
-            solute_vars=solute_feature_vars,
-            solvent_means=solvent_feature_means,
-            solvent_vars=solvent_feature_vars,
-            temperature_means=temperature_means,
-            temperature_vars=temperature_vars,
-        )
+        if AQ_ONLY:
+            model = fastpropAqueousSolubility(
+                **model_kwargs,
+                target_means=solubility_means,
+                target_vars=solubility_vars,
+                solute_means=solute_feature_means,
+                solute_vars=solute_feature_vars,
+                temperature_means=temperature_means,
+                temperature_vars=temperature_vars,
+            )
+        else:
+            model = fastpropSolubility(
+                **model_kwargs,
+                target_means=solubility_means,
+                target_vars=solubility_vars,
+                solute_means=solute_feature_means,
+                solute_vars=solute_feature_vars,
+                solvent_means=solvent_feature_means,
+                solvent_vars=solvent_feature_vars,
+                temperature_means=temperature_means,
+                temperature_vars=temperature_vars,
+            )
         logger.info("Model architecture:\n{%s}", str(model))
         test_results, validation_results = train_and_test(_output_dir, model, train_dataloader, val_dataloader, test_dataloader, 100, 20)
         all_test_results.append(test_results[0])
@@ -199,7 +220,25 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
 
 
 if __name__ == "__main__":
-    hopt_params = params = {}
+    if AQ_ONLY:
+        hopt_params = {
+            "input_activation": "clamp3",
+            "activation_fxn": "relu",
+            "num_solute_layers": 2,
+            "solute_hidden_size": 1200,
+        }
+    else:
+        hopt_params = {
+            "input_activation": "clamp3",
+            "activation_fxn": "relu",
+            "interaction_hidden_size": 2000,
+            "num_interaction_layers": 2,
+            "interaction_operation": "concatenation",
+            "num_solute_layers": 2,
+            "solute_hidden_size": 1200,
+            "num_solvent_layers": 1,
+            "solvent_hidden_size": 1000,
+        }
     train_ensemble(
         remove_output=False,
         num_features=1613,
