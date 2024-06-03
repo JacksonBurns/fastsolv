@@ -12,7 +12,8 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 from scipy.stats import pearsonr
 
 from data import SolubilityDataset
-from model import fastpropSolubility
+from model import fastpropAqueousSolubility, fastpropSolubility
+from train import AQ_ONLY
 
 SCALE_TARGETS = True
 SOLUTE_EXTRAPOLATION = True
@@ -46,26 +47,31 @@ def test_ensemble(checkpoint_dir: Path):
     # reload the models as an ensemble
     all_models = []
     for checkpoint in os.listdir(checkpoint_dir):
-        model = fastpropSolubility.load_from_checkpoint(checkpoint_dir / checkpoint)
+        if AQ_ONLY:
+            model = fastpropAqueousSolubility.load_from_checkpoint(checkpoint_dir / checkpoint)
+        else:
+            model = fastpropSolubility.load_from_checkpoint(checkpoint_dir / checkpoint)
         all_models.append(model)
     for holdout_fpath, holdout_name in zip(
         (
             Path("boobier/acetone_solubility_data_features.csv"),
             Path("boobier/benzene_solubility_data_features.csv"),
             Path("boobier/ethanol_solubility_data_features.csv"),
-            Path("llompart/llompart_aqsoldb.csv"),
+            Path("llompart/llompart_aqsoldbc.csv"),
             Path("llompart/llompart_ochem.csv"),
             Path("krasnov/bigsol_downsample_features.csv"),
             Path("vermeire/prepared_data.csv"),
+            Path("bsd/bsd_features.csv"),
         ),
         (
             "boobier_acetone",
             "boobier_benzene",
             "boobier_ethanol",
-            "llompart_aqsoldb",
+            "llompart_aqsoldbc",
             "llompart_ochem",
             "krasnov_downsample",
             "vermeire",
+            "bsd",
         ),
         strict=True,
     ):
@@ -118,4 +124,4 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
-    test_ensemble(Path("output/fastprop_aqsepv3_optimal/checkpoints"))
+    test_ensemble(Path("output/fastprop_aqonly_opt_noinact/checkpoints"))

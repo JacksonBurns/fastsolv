@@ -25,8 +25,8 @@ DROP_OVERLAP = False
 
 bigsol_data: pd.DataFrame = pd.read_csv("BigSolDB.csv")
 print(len(bigsol_data), "<--- number of molecules in the original dataset")
-bigsol_data = bigsol_data[~bigsol_data["Solvent"].isin(("PEG-400", "PEG-300", "PEG-200"))]
-print(len(bigsol_data), "<--- number of molecules without PEG")
+bigsol_data = bigsol_data[~bigsol_data["Solvent"].isin(("PEG-400", "PEG-300", "PEG-200", "water"))]
+print(len(bigsol_data), "<--- number of molecules without PEG or water")
 # drop any which are also in our data
 if DROP_OVERLAP:
     vermeire_smiles = set(Chem.CanonSmiles(s) for s in pd.read_csv(Path("vermeire/prepared_data.csv"), index_col=0)["solute_smiles"])

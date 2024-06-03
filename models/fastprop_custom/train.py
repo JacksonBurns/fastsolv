@@ -222,10 +222,10 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
 if __name__ == "__main__":
     if AQ_ONLY:
         hopt_params = {
-            "input_activation": "clamp3",
-            "activation_fxn": "relu",
-            "num_solute_layers": 2,
-            "solute_hidden_size": 1200,
+            "input_activation": None,
+            "activation_fxn": "leakyrelu",
+            "num_solute_layers": 4,
+            "solute_hidden_size": 600,
         }
     else:
         hopt_params = {
