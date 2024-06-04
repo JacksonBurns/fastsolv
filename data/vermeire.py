@@ -41,3 +41,6 @@ fastprop_data[["temperature"]].to_csv(_dest / "chemprop_features.csv")
 # write just the aqueous data
 aq_only = fastprop_data[fastprop_data["solvent_smiles"].eq("O")].reset_index()
 aq_only.to_csv(_dest / "vermeire_aq.csv")
+
+nonaq_only = fastprop_data[~fastprop_data["solvent_smiles"].eq("O")].reset_index()
+nonaq_only.to_csv(_dest / "vermeire_nonaq.csv")
