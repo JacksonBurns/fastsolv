@@ -8,10 +8,10 @@
 # training metadata
 output_directory: fastprop_highsol_training
 problem_type: regression
-input_file: targets.csv
+input_file: ../../data/vermeire/targets.csv
 target_columns: logS
 smiles_column: solvent_smiles
-precomputed: features.csv
+precomputed: ../../data/vermeire/features.csv
 random_seed: 42
 
 # network architecture
