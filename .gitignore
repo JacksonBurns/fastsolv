@@ -5,6 +5,7 @@ paper/paper.pdf
 *.pyc
 models/fastprop_custom/output*
 models/fastprop_custom/.output*
+models/fastprop_custom/transfer_optimal
 checkpoints/
 slurm*err
 slurm*out

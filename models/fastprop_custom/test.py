@@ -15,8 +15,6 @@ from data import SolubilityDataset
 from model import fastpropAqueousSolubility, fastpropSolubility
 from train import AQ_ONLY
 
-SCALE_TARGETS = True
-SOLUTE_EXTRAPOLATION = True
 RANDOM_SEED = 1701  # the final frontier
 
 SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
@@ -61,6 +59,7 @@ def test_ensemble(checkpoint_dir: Path):
             Path("llompart/llompart_ochem.csv"),
             Path("krasnov/bigsol_downsample_features.csv"),
             Path("vermeire/prepared_data.csv"),
+            Path("vermeire/vermeire_aq.csv"),
             Path("bsd/bsd_features.csv"),
         ),
         (
@@ -71,6 +70,7 @@ def test_ensemble(checkpoint_dir: Path):
             "llompart_ochem",
             "krasnov_downsample",
             "vermeire",
+            "vermeire_aq",
             "bsd",
         ),
         strict=True,
@@ -124,4 +124,4 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
-    test_ensemble(Path("output/fastprop_aqonly_opt_noinact/checkpoints"))
+    test_ensemble(Path("transfer_optimal/krasnov/vaq_tune_readout_intxn/checkpoints"))

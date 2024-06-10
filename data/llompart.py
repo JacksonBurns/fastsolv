@@ -88,25 +88,30 @@ def _keep(s):
     return True
 
 
-# AqSolDBc
-df = pd.read_csv("AqSolDBc.csv")
-print(len(df), "<-- original AqSolDB")
-df = df[
-    ~df["Charge"].isin(("PureChargeSeparation",))
-    & df["SMILEScurated"].apply(_keep)  # no missing SMILES, no salts, 2+ atoms, no banned atoms
-    & df["SD"].le(0.5)  # deviation less than 0.5
-    & df["Composition"].isin(("mono-constituent", np.nan))  # no unknown or multi-constituent
-    & df["Error"].isna()  # no other miscellaneous error
-]
-print(len(df), "<-- curated")
+# AqSolDB original
+df = pd.read_csv("AqSolDBc_butnotactually.csv")
 df.insert(0, "temperature", 273.15 + 25)
 df.insert(0, "solvent_smiles", "O")
 df = df.rename(columns={"Solubility": "logS", "SMILEScurated": "solute_smiles"})
-df = df.reset_index()
+df = df[~df["solute_smiles"].isna()].reset_index()
 
 fastprop_data = get_descs(df)
 
-fastprop_data.to_csv(_dest / "llompart_aqsoldb.csv")
+fastprop_data.insert(1, "source", "unknown")
+fastprop_data.to_csv(_dest / "aqsoldb_og.csv")
+
+exit(1)
+
+# AqSolDBc
+df = pd.read_csv("AqSolDBc.csv")
+df.insert(0, "temperature", 273.15 + 25)
+df.insert(0, "solvent_smiles", "O")
+df = df.rename(columns={"ExperimentalLogS": "logS", "SmilesCurated": "solute_smiles"})
+
+fastprop_data = get_descs(df)
+
+fastprop_data.insert(1, "source", "unknown")
+fastprop_data.to_csv(_dest / "llompart_aqsoldbc.csv")
 
 # OChemUnseen (starts from Curated to apply the same preprocessing)
 df: pd.DataFrame = pd.read_csv("OChemCurated.csv")
