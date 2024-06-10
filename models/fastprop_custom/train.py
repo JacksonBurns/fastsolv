@@ -36,6 +36,12 @@ SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
 SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
 
 
+def _f(r):
+    if len(r["logS"]) == 1:
+        return np.array([0.0])
+    return [i if np.isfinite(i) else 0.0 for i in np.gradient(r["logS"], r["temperature"])]
+
+
 def logS_within_0_7_percentage(truth: torch.Tensor, prediction: torch.Tensor, ignored: None, multitask: bool = False):
     return (truth - prediction).abs().less_equal(0.7).count_nonzero() / prediction.size(dim=0)
 
@@ -139,12 +145,36 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
         solubilities[val_indexes] = target_scaler(solubilities[val_indexes])
         solubilities[test_indexes] = target_scaler(solubilities[test_indexes])
 
+        # calculate the expected gradients post-scaling
+        # start by inserting the rescaled data back into the metatdata dataframe _in the right order_
+        tgrads = pd.concat(
+            (
+                metadata_df,
+                pd.DataFrame(
+                    {
+                        "logS": np.ravel(solubilities.numpy()),
+                        "temperature": np.ravel(temperatures.numpy()),
+                    }
+                ),
+            ),
+            axis=1,
+        )
+        # group the data by experiment
+        tgrads = tgrads.groupby(["source", "solvent_smiles", "solute_smiles"])[["logS", "temperature"]].aggregate(list)
+        # calculate the gradient at each measurement of logS wrt temperature
+        tgrads["logSgradT"] = tgrads.apply(_f, axis=1)
+        tgrads = tgrads.explode("logSgradT")["logSgradT"].to_numpy(dtype=np.float32)
+        logger.info(f"{np.count_nonzero(tgrads > 0)} of {len(tgrads)} were positive!")
+        tgrads = torch.tensor(tgrads, dtype=torch.float32)
+        temperatures.requires_grad_(True)
+
         train_dataloader = fastpropDataLoader(
             SolubilityDataset(
                 solute_features[train_indexes],
                 solvent_features[train_indexes],
                 temperatures[train_indexes],
                 solubilities[train_indexes],
+                tgrads[train_indexes],
             ),
             shuffle=True,
             drop_last=True,
@@ -155,6 +185,7 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                 solvent_features[val_indexes],
                 temperatures[val_indexes],
                 solubilities[val_indexes],
+                tgrads[val_indexes],
             ),
         )
         test_dataloader = fastpropDataLoader(
@@ -163,6 +194,7 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                 solvent_features[test_indexes],
                 temperatures[test_indexes],
                 solubilities[test_indexes],
+                tgrads[test_indexes],
             ),
             batch_size=10_000,
         )

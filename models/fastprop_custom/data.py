@@ -9,11 +9,13 @@ class SolubilityDataset(TorchDataset):
         solvent_features: torch.Tensor,
         temperature: torch.Tensor,
         solubility: torch.Tensor,
+        solubility_gradient: torch.Tensor,
     ):
         self.solute_features = solute_features
         self.solvent_features = solvent_features
         self.temperature = temperature
         self.solubility = solubility
+        self.solubility_gradient = solubility_gradient
         self.length = len(solubility)
 
     def __len__(self):
@@ -27,4 +29,5 @@ class SolubilityDataset(TorchDataset):
                 self.temperature[index],
             ),
             self.solubility[index],
+            self.solubility_gradient[index],
         )

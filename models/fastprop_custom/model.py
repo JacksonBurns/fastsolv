@@ -221,6 +221,15 @@ class fastpropSolubility(_fastprop):
             logits = self.forward((solute_features, solvent_features, temperature))
         return inverse_standard_scale(logits, self.target_means, self.target_vars)
 
+    def _machine_loss(self, batch):
+        (_solute, _solvent, temperature), y, y_grad = batch
+        y_hat = self.forward((_solute, _solvent, temperature))
+        y_loss = torch.nn.functional.mse_loss(y_hat, y, reduction="mean")
+        y_grad_loss = 0.0
+        # calculate the gradient of y_hat wrt temperature
+        loss = y_loss + y_grad_loss
+        return loss, y_hat
+
 
 if __name__ == "__main__":
     # test batch of 4
