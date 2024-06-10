@@ -13,27 +13,16 @@
 from math import log10
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
-from rdkit import Chem
 from thermo.chemical import Chemical
 
 from utils import get_descs
 
 
-DROP_OVERLAP = False
-
 bigsol_data: pd.DataFrame = pd.read_csv("BigSolDB.csv")
 print(len(bigsol_data), "<--- number of molecules in the original dataset")
 bigsol_data = bigsol_data[~bigsol_data["Solvent"].isin(("PEG-400", "PEG-300", "PEG-200", "water"))]
 print(len(bigsol_data), "<--- number of molecules without PEG or water")
-# drop any which are also in our data
-if DROP_OVERLAP:
-    vermeire_smiles = set(Chem.CanonSmiles(s) for s in pd.read_csv(Path("vermeire/prepared_data.csv"), index_col=0)["solute_smiles"])
-    bigsol_smiles = set(Chem.CanonSmiles(s) for s in bigsol_data["SMILES"])
-    overlapped_smiles = tuple(vermeire_smiles.intersection(bigsol_smiles))
-    bigsol_data = bigsol_data[~bigsol_data["SMILES"].isin(overlapped_smiles)]
-    print(len(bigsol_data), "<--- number of molecules after dropping solutes in our training dataset")
 
 
 # convert the mol fraction to concentration
@@ -90,4 +79,4 @@ fastprop_data.insert(1, "source", sources)
 _dest = Path("krasnov")
 if not Path.exists(_dest):
     Path.mkdir(_dest)
-fastprop_data.to_csv(_dest / "bigsol_downsample_features.csv")
+fastprop_data.to_csv(_dest / "bigsoldb_downsample.csv")

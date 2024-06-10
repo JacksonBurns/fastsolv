@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from utils import get_descs, DESCRIPTOR_COLUMNS
+from utils import drop_bigsol_overlap, get_descs, DESCRIPTOR_COLUMNS
 
 # load the two datafiles and concatenate them
 _src_dir: str = Path("SolProp_v1.2/Data")
@@ -33,14 +33,10 @@ _dest = Path("vermeire")
 if not Path.exists(_dest):
     Path.mkdir(_dest)
 fastprop_data.insert(0, 'source', all_data['source'])
-fastprop_data.to_csv(_dest / "prepared_data.csv")
 fastprop_data[["temperature"] + DESCRIPTOR_COLUMNS].to_csv(_dest / "features.csv")
 fastprop_data[["solute_smiles", "solvent_smiles", "logS"]].to_csv(_dest / "targets.csv")
 fastprop_data[["temperature"]].to_csv(_dest / "chemprop_features.csv")
 
-# write just the aqueous data
-aq_only = fastprop_data[fastprop_data["solvent_smiles"].eq("O")].reset_index()
-aq_only.to_csv(_dest / "vermeire_aq.csv")
-
-nonaq_only = fastprop_data[~fastprop_data["solvent_smiles"].eq("O")].reset_index()
-nonaq_only.to_csv(_dest / "vermeire_nonaq.csv")
+# write just the non-aqueous data
+fastprop_data = drop_bigsol_overlap(fastprop_data)
+fastprop_data[~fastprop_data["solvent_smiles"].eq("O")].reset_index(drop=True).to_csv(_dest / "solprop_nonaq.csv")

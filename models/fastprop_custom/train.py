@@ -23,23 +23,14 @@ from fastprop.model import train_and_test
 from lightning.pytorch import seed_everything
 
 from data import SolubilityDataset
-from model import fastpropAqueousSolubility, fastpropSolubility, ENABLE_BATCHNORM
+from model import fastpropSolubility
 
 logger = init_logger(__name__)
 
 NUM_REPLICATES = 4
-SCALE_TARGETS = True
-STUDY_SPLIT = None  # None for solvent split, False for random
+SPLIT_TYPE = "source"  # solute, random
 RANDOM_SEED = 1701  # the final frontier
-AQ_ONLY = False
-TRANSFER = True
-TRAINING_FPATH = Path("vermeire/vermeire_aq.csv")
-# one of:
-# Path("vermeire/prepared_data.csv")
-# Path("krasnov/bigsol_downsample_features.csv")
-# Path("llompart/llompart_aqsoldbc.csv")
-# Path("llompart/aqsoldb_og.csv")
-# Path("vermeire/vermeire_aq.csv")
+TRAINING_FPATH = Path("krasnov/bigsoldb_downsample.csv")
 
 SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
 SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
@@ -101,9 +92,6 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
     logger.info(f"Run 'tensorboard --logdir {_output_dir}/tensorboard_logs' to track training progress.")
     random_seed = RANDOM_SEED
     all_test_results, all_validation_results = [], []
-    if TRANSFER:
-        _transfer_ckpt_dir = Path("transfer_optimal/krasnov/nonaq_base/checkpoints")
-        transfer_ckpts = os.listdir(_transfer_ckpt_dir)
     for replicate_number in range(NUM_REPLICATES):
         logger.info(f"Training model {replicate_number+1} of {NUM_REPLICATES} ({random_seed=})")
         # keep backups so repeat trials don't rescale already scaled data
@@ -113,12 +101,12 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
         solvent_features = solvent_features_og.detach().clone()
 
         # split the data s.t. model only sees a subset of the studies used to aggregate the training data
-        if STUDY_SPLIT:
+        if SPLIT_TYPE == "source":
             studies_train, studies_val, studies_test = train_val_test_split(pd.unique(metadata_df["source"]), random_state=random_seed)
             train_indexes = metadata_df.index[metadata_df["source"].isin(studies_train)].tolist()
             val_indexes = metadata_df.index[metadata_df["source"].isin(studies_val)].tolist()
             test_indexes = metadata_df.index[metadata_df["source"].isin(studies_test)].tolist()
-        elif STUDY_SPLIT is None:
+        elif SPLIT_TYPE == "solute":
             solutes_train, solutes_val, solutes_test = train_val_test_split(pd.unique(metadata_df["solute_smiles"]), random_state=random_seed)
             train_indexes = metadata_df.index[metadata_df["solute_smiles"].isin(solutes_train)].tolist()
             val_indexes = metadata_df.index[metadata_df["solute_smiles"].isin(solutes_val)].tolist()
@@ -130,44 +118,26 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
             f"train: {len(train_indexes)} ({len(train_indexes)/_total:.0%}) validation:"
             f"{len(val_indexes)} ({len(val_indexes)/_total:.0%}) test: {len(test_indexes)} ({len(test_indexes)/_total:.0%})"
         )
+        # scaling
+        solute_features[train_indexes], solute_feature_means, solute_feature_vars = standard_scale(solute_features[train_indexes])
+        solute_scaler = partial(standard_scale, means=solute_feature_means, variances=solute_feature_vars)
+        solute_features[val_indexes] = solute_scaler(solute_features[val_indexes])
+        solute_features[test_indexes] = solute_scaler(solute_features[test_indexes])
 
-        if TRANSFER:
-            model = fastpropSolubility.load_from_checkpoint(
-                _transfer_ckpt_dir / transfer_ckpts[replicate_number],
-                map_location="cpu",  # put on CPU for now so we can get to the scalers
-            )
-            model.solute_representation_module.requires_grad_(False)
-            # model.interaction_module.requires_grad_(False)
-            # model.readout.requires_grad_(False)
-            model.solvent_representation_module.requires_grad_(False)
+        solvent_features[train_indexes], solvent_feature_means, solvent_feature_vars = standard_scale(solvent_features[train_indexes])
+        solvent_scaler = partial(standard_scale, means=solvent_feature_means, variances=solute_feature_vars)
+        solvent_features[val_indexes] = solvent_scaler(solvent_features[val_indexes])
+        solvent_features[test_indexes] = solvent_scaler(solvent_features[test_indexes])
 
-            solute_features = standard_scale(solute_features, model.solute_means, model.solute_vars)
-            solvent_features = standard_scale(solvent_features, model.solvent_means, model.solvent_vars)
-            temperatures = standard_scale(temperatures, model.temperature_means, model.temperature_vars)
-            solubilities = standard_scale(solubilities, model.target_means, model.target_vars)
-        else:
-            # scaling
-            solute_features[train_indexes], solute_feature_means, solute_feature_vars = standard_scale(solute_features[train_indexes])
-            solute_scaler = partial(standard_scale, means=solute_feature_means, variances=solute_feature_vars)
-            solute_features[val_indexes] = solute_scaler(solute_features[val_indexes])
-            solute_features[test_indexes] = solute_scaler(solute_features[test_indexes])
+        temperatures[train_indexes], temperature_means, temperature_vars = standard_scale(temperatures[train_indexes])
+        temperature_scaler = partial(standard_scale, means=temperature_means, variances=temperature_vars)
+        temperatures[val_indexes] = temperature_scaler(temperatures[val_indexes])
+        temperatures[test_indexes] = temperature_scaler(temperatures[test_indexes])
 
-            solvent_features[train_indexes], solvent_feature_means, solvent_feature_vars = standard_scale(solvent_features[train_indexes])
-            solvent_scaler = partial(standard_scale, means=solvent_feature_means, variances=solute_feature_vars)
-            solvent_features[val_indexes] = solvent_scaler(solvent_features[val_indexes])
-            solvent_features[test_indexes] = solvent_scaler(solvent_features[test_indexes])
-
-            temperatures[train_indexes], temperature_means, temperature_vars = standard_scale(temperatures[train_indexes])
-            temperature_scaler = partial(standard_scale, means=temperature_means, variances=temperature_vars)
-            temperatures[val_indexes] = temperature_scaler(temperatures[val_indexes])
-            temperatures[test_indexes] = temperature_scaler(temperatures[test_indexes])
-
-            solubility_means = solubility_vars = None
-            if SCALE_TARGETS:
-                solubilities[train_indexes], solubility_means, solubility_vars = standard_scale(solubilities[train_indexes])
-                target_scaler = partial(standard_scale, means=solubility_means, variances=solubility_vars)
-                solubilities[val_indexes] = target_scaler(solubilities[val_indexes])
-                solubilities[test_indexes] = target_scaler(solubilities[test_indexes])
+        solubilities[train_indexes], solubility_means, solubility_vars = standard_scale(solubilities[train_indexes])
+        target_scaler = partial(standard_scale, means=solubility_means, variances=solubility_vars)
+        solubilities[val_indexes] = target_scaler(solubilities[val_indexes])
+        solubilities[test_indexes] = target_scaler(solubilities[test_indexes])
 
         train_dataloader = fastpropDataLoader(
             SolubilityDataset(
@@ -177,7 +147,7 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                 solubilities[train_indexes],
             ),
             shuffle=True,
-            drop_last=ENABLE_BATCHNORM,
+            drop_last=True,
         )
         val_dataloader = fastpropDataLoader(
             SolubilityDataset(
@@ -198,30 +168,17 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
         )
 
         # initialize the model and train/test
-        if AQ_ONLY:
-            model = fastpropAqueousSolubility(
-                **model_kwargs,
-                target_means=solubility_means,
-                target_vars=solubility_vars,
-                solute_means=solute_feature_means,
-                solute_vars=solute_feature_vars,
-                temperature_means=temperature_means,
-                temperature_vars=temperature_vars,
-            )
-        elif TRANSFER:
-            ...
-        else:
-            model = fastpropSolubility(
-                **model_kwargs,
-                target_means=solubility_means,
-                target_vars=solubility_vars,
-                solute_means=solute_feature_means,
-                solute_vars=solute_feature_vars,
-                solvent_means=solvent_feature_means,
-                solvent_vars=solvent_feature_vars,
-                temperature_means=temperature_means,
-                temperature_vars=temperature_vars,
-            )
+        model = fastpropSolubility(
+            **model_kwargs,
+            target_means=solubility_means,
+            target_vars=solubility_vars,
+            solute_means=solute_feature_means,
+            solute_vars=solute_feature_vars,
+            solvent_means=solvent_feature_means,
+            solvent_vars=solvent_feature_vars,
+            temperature_means=temperature_means,
+            temperature_vars=temperature_vars,
+        )
         logger.info("Model architecture:\n{%s}", str(model))
         test_results, validation_results = train_and_test(_output_dir, model, train_dataloader, val_dataloader, test_dataloader, 100, 20)
         all_test_results.append(test_results[0])
@@ -241,25 +198,17 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
 
 
 if __name__ == "__main__":
-    if AQ_ONLY:
-        hopt_params = {
-            "input_activation": None,
-            "activation_fxn": "leakyrelu",
-            "num_solute_layers": 4,
-            "solute_hidden_size": 600,
-        }
-    else:
-        hopt_params = {
-            "input_activation": "clamp3",
-            "activation_fxn": "relu",
-            "interaction_hidden_size": 2600,
-            "num_interaction_layers": 2,
-            "interaction_operation": "concatenation",
-            "num_solute_layers": 1,
-            "solute_hidden_size": 200,
-            "num_solvent_layers": 1,
-            "solvent_hidden_size": 200,
-        }
+    hopt_params = {
+        "input_activation": "clamp3",
+        "activation_fxn": "relu",
+        "interaction_hidden_size": 2600,
+        "num_interaction_layers": 2,
+        "interaction_operation": "concatenation",
+        "num_solute_layers": 1,
+        "solute_hidden_size": 200,
+        "num_solvent_layers": 1,
+        "solvent_hidden_size": 200,
+    }
     train_ensemble(
         remove_output=False,
         num_features=1613,

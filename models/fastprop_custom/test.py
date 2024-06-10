@@ -12,8 +12,7 @@ from sklearn.metrics import mean_absolute_error, mean_squared_error
 from scipy.stats import pearsonr
 
 from data import SolubilityDataset
-from model import fastpropAqueousSolubility, fastpropSolubility
-from train import AQ_ONLY
+from model import fastpropSolubility
 
 RANDOM_SEED = 1701  # the final frontier
 
@@ -45,35 +44,14 @@ def test_ensemble(checkpoint_dir: Path):
     # reload the models as an ensemble
     all_models = []
     for checkpoint in os.listdir(checkpoint_dir):
-        if AQ_ONLY:
-            model = fastpropAqueousSolubility.load_from_checkpoint(checkpoint_dir / checkpoint)
-        else:
-            model = fastpropSolubility.load_from_checkpoint(checkpoint_dir / checkpoint)
+        model = fastpropSolubility.load_from_checkpoint(checkpoint_dir / checkpoint)
         all_models.append(model)
-    for holdout_fpath, holdout_name in zip(
-        (
-            Path("boobier/acetone_solubility_data_features.csv"),
-            Path("boobier/benzene_solubility_data_features.csv"),
-            Path("boobier/ethanol_solubility_data_features.csv"),
-            Path("llompart/llompart_aqsoldbc.csv"),
-            Path("llompart/llompart_ochem.csv"),
-            Path("krasnov/bigsol_downsample_features.csv"),
-            Path("vermeire/prepared_data.csv"),
-            Path("vermeire/vermeire_aq.csv"),
-            Path("bsd/bsd_features.csv"),
-        ),
-        (
-            "boobier_acetone",
-            "boobier_benzene",
-            "boobier_ethanol",
-            "llompart_aqsoldbc",
-            "llompart_ochem",
-            "krasnov_downsample",
-            "vermeire",
-            "vermeire_aq",
-            "bsd",
-        ),
-        strict=True,
+    for holdout_fpath in (
+        Path("boobier/leeds_acetone.csv"),
+        Path("boobier/leeds_benzene.csv"),
+        Path("boobier/leeds_ethanol.csv"),
+        Path("krasnov/bigsoldb_downsample.csv"),
+        Path("vermeire/solprop_nonaq.csv"),
     ):
         # load the holdout data
         df = pd.read_csv(Path("../../data") / holdout_fpath, index_col=0)
@@ -120,8 +98,8 @@ def test_ensemble(checkpoint_dir: Path):
         stat_str = (
             f" - Pearson's r: {r:.4f}\n - MAE: {mae:.4f}\n - MSE: {mse:.4f}\n - RMSE: {rmse:.4f}\n - W/n 0.7: {wn_07:.4f}\n - W/n 1.0: {wn_1:.4f}"
         )
-        parity_plot(out["logS_true"], out["logS_pred"], holdout_name, _output_dir / f"{holdout_name}_parity.png", stat_str)
+        parity_plot(out["logS_true"], out["logS_pred"], holdout_fpath.stem, _output_dir / f"{holdout_fpath.stem}_parity.png", stat_str)
 
 
 if __name__ == "__main__":
-    test_ensemble(Path("transfer_optimal/krasnov/vaq_tune_readout_intxn/checkpoints"))
+    test_ensemble(Path("output/best/checkpoints"))

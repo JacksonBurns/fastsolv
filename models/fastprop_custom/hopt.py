@@ -56,7 +56,7 @@ def main():
     logging.getLogger("pytorch_lightning").setLevel(logging.INFO)
 
     # load the data
-    df = pd.read_csv(Path("../../data/vermeire/prepared_data.csv"), index_col=0)
+    df = pd.read_csv(Path("../../data/vermeire/solprop_nonaq.csv"), index_col=0)
     metadata_df = df[["solute_smiles", "solvent_smiles", "source"]]
     solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
     temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
