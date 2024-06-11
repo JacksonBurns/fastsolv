@@ -38,8 +38,9 @@ SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
 
 def _f(r):
     if len(r["logS"]) == 1:
-        return np.array([0.0])
-    return [i if np.isfinite(i) else 0.0 for i in np.gradient(r["logS"], r["temperature"])]
+        return [np.nan]
+    # mask out enormous (non-physical) values and nan/inf
+    return [i if (np.isfinite(i) and np.abs(i) < 1.0) else np.nan for i in np.gradient(r["logS"], r["temperature"])]
 
 
 def logS_within_0_7_percentage(truth: torch.Tensor, prediction: torch.Tensor, ignored: None, multitask: bool = False):
@@ -164,9 +165,11 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
         # calculate the gradient at each measurement of logS wrt temperature
         tgrads["logSgradT"] = tgrads.apply(_f, axis=1)
         tgrads = tgrads.explode("logSgradT")["logSgradT"].to_numpy(dtype=np.float32)
+        _mask = np.isnan(tgrads)
+        logger.warning(f"Masking {np.count_nonzero(_mask)} of {len(_mask)} gradients!")
+        tgrads[_mask] = 0.0
         logger.info(f"{np.count_nonzero(tgrads > 0)} of {len(tgrads)} were positive!")
-        tgrads = torch.tensor(tgrads, dtype=torch.float32)
-        temperatures.requires_grad_(True)
+        tgrads = torch.tensor(tgrads, dtype=torch.float32).unsqueeze(-1)
 
         train_dataloader = fastpropDataLoader(
             SolubilityDataset(
@@ -176,6 +179,7 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                 solubilities[train_indexes],
                 tgrads[train_indexes],
             ),
+            batch_size=2048,
             shuffle=True,
             drop_last=True,
         )
@@ -187,6 +191,7 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                 solubilities[val_indexes],
                 tgrads[val_indexes],
             ),
+            batch_size=2048,
         )
         test_dataloader = fastpropDataLoader(
             SolubilityDataset(
@@ -196,7 +201,7 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                 solubilities[test_indexes],
                 tgrads[test_indexes],
             ),
-            batch_size=10_000,
+            batch_size=2048,
         )
 
         # initialize the model and train/test

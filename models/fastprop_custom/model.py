@@ -221,14 +221,29 @@ class fastpropSolubility(_fastprop):
             logits = self.forward((solute_features, solvent_features, temperature))
         return inverse_standard_scale(logits, self.target_means, self.target_vars)
 
-    def _machine_loss(self, batch):
+    def training_step(self, batch: tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor, torch.Tensor], batch_idx: int):
         (_solute, _solvent, temperature), y, y_grad = batch
-        y_hat = self.forward((_solute, _solvent, temperature))
+        temperature.requires_grad_(True)
+        y_hat: torch.Tensor = self.forward((_solute, _solvent, temperature))
         y_loss = torch.nn.functional.mse_loss(y_hat, y, reduction="mean")
-        y_grad_loss = 0.0
         # calculate the gradient of y_hat wrt temperature
+        (y_hat_grad, ) = torch.autograd.grad(
+            y_hat,
+            temperature,
+            grad_outputs=torch.ones_like(y_hat),
+            retain_graph=True,
+        )
+        _scale_factor = 10.0
+        y_grad_loss = _scale_factor * (y_hat_grad - y_grad).abs().mean()
         loss = y_loss + y_grad_loss
-        return loss, y_hat
+        self.log(f"train_{self.training_metric}_scaled_loss", loss)
+        self.log("train_logS_scaled_loss", y_loss)
+        self.log("train_dlogSdT_scaled_loss", y_grad_loss)
+        return loss
+
+    def _machine_loss(self, batch):
+        features, target, _ = batch
+        return super()._machine_loss((features, target))
 
 
 if __name__ == "__main__":
