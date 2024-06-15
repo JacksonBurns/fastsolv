@@ -155,16 +155,20 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                     {
                         "logS": np.ravel(solubilities.numpy()),
                         "temperature": np.ravel(temperatures.numpy()),
+                        "source_index": np.arange(len(temperatures)),
                     }
                 ),
             ),
             axis=1,
         )
         # group the data by experiment
-        tgrads = tgrads.groupby(["source", "solvent_smiles", "solute_smiles"])[["logS", "temperature"]].aggregate(list)
+        tgrads = tgrads.groupby(["source", "solvent_smiles", "solute_smiles"])[["logS", "temperature", "source_index"]].aggregate(list)
         # calculate the gradient at each measurement of logS wrt temperature
         tgrads["logSgradT"] = tgrads.apply(_f, axis=1)
-        tgrads = tgrads.explode("logSgradT")["logSgradT"].to_numpy(dtype=np.float32)
+        # get them in the same order as the source data
+        tgrads = tgrads.explode(["logSgradT", "source_index"]).sort_values(by="source_index")
+        # convert and mask
+        tgrads = tgrads["logSgradT"].to_numpy(dtype=np.float32)
         _mask = np.isnan(tgrads)
         logger.warning(f"Masking {np.count_nonzero(_mask)} of {len(_mask)} gradients!")
         tgrads[_mask] = 0.0
