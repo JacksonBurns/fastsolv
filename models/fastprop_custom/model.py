@@ -70,8 +70,6 @@ def _build_mlp(input_size, hidden_size, act_fun, num_layers):
                 modules.append(torch.nn.LeakyReLU())
             else:
                 raise TypeError(f"What is {act_fun}?")
-            modules.append(torch.nn.BatchNorm1d(hidden_size))
-            modules.append(torch.nn.Dropout())
     return modules
 
 
@@ -221,29 +219,38 @@ class fastpropSolubility(_fastprop):
             logits = self.forward((solute_features, solvent_features, temperature))
         return inverse_standard_scale(logits, self.target_means, self.target_vars)
 
-    def training_step(self, batch: tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor, torch.Tensor], batch_idx: int):
+    @torch.enable_grad()
+    def _custom_loss(self, batch: tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor, torch.Tensor], name: str):
         (_solute, _solvent, temperature), y, y_grad = batch
-        temperature.requires_grad_(True)
+        temperature.requires_grad_()
         y_hat: torch.Tensor = self.forward((_solute, _solvent, temperature))
         y_loss = torch.nn.functional.mse_loss(y_hat, y, reduction="mean")
-        # calculate the gradient of y_hat wrt temperature
-        (y_hat_grad, ) = torch.autograd.grad(
+        (y_grad_hat,) = torch.autograd.grad(
             y_hat,
             temperature,
             grad_outputs=torch.ones_like(y_hat),
             retain_graph=True,
         )
-        _scale_factor = 10.0
-        y_grad_loss = _scale_factor * (y_hat_grad - y_grad).abs().mean()
+        _scale_factor = 100.0
+        y_grad_loss = _scale_factor * torch.nn.functional.mse_loss(y_grad_hat, y_grad, reduction="mean")
         loss = y_loss + y_grad_loss
-        self.log(f"train_{self.training_metric}_scaled_loss", loss)
-        self.log("train_logS_scaled_loss", y_loss)
-        self.log("train_dlogSdT_scaled_loss", y_grad_loss)
+        self.log(f"{name}_{self.training_metric}_scaled_loss", loss)
+        self.log(f"{name}_logS_scaled_loss", y_loss)
+        self.log(f"{name}_dlogSdT_scaled_loss", y_grad_loss)
+        return loss, y_hat
+
+    def training_step(self, batch, batch_idx):
+        return self._custom_loss(batch, "train")[0]
+
+    def validation_step(self, batch, batch_idx):
+        loss, y_hat = self._custom_loss(batch, "validation")
+        self._human_loss(y_hat, batch, "validation")
         return loss
 
-    def _machine_loss(self, batch):
-        features, target, _ = batch
-        return super()._machine_loss((features, target))
+    def test_step(self, batch, batch_idx):
+        loss, y_hat = self._custom_loss(batch, "test")
+        self._human_loss(y_hat, batch, "test")
+        return loss
 
 
 if __name__ == "__main__":

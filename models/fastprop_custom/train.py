@@ -183,7 +183,7 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                 solubilities[train_indexes],
                 tgrads[train_indexes],
             ),
-            batch_size=2048,
+            batch_size=4096,
             shuffle=True,
             drop_last=True,
         )
@@ -195,7 +195,7 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                 solubilities[val_indexes],
                 tgrads[val_indexes],
             ),
-            batch_size=2048,
+            batch_size=4096,
         )
         test_dataloader = fastpropDataLoader(
             SolubilityDataset(
@@ -205,7 +205,7 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                 solubilities[test_indexes],
                 tgrads[test_indexes],
             ),
-            batch_size=2048,
+            batch_size=4096,
         )
 
         # initialize the model and train/test
@@ -221,7 +221,17 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
             temperature_vars=temperature_vars,
         )
         logger.info("Model architecture:\n{%s}", str(model))
-        test_results, validation_results = train_and_test(_output_dir, model, train_dataloader, val_dataloader, test_dataloader, 100, 20)
+        test_results, validation_results = train_and_test(
+            _output_dir,
+            model,
+            train_dataloader,
+            val_dataloader,
+            test_dataloader,
+            100,
+            20,
+            quiet=remove_output,
+            inference_mode=False,
+        )
         all_test_results.append(test_results[0])
         all_validation_results.append(validation_results[0])
 

@@ -1,6 +1,6 @@
 #!/bin/bash -l
 #SBATCH -J hopt
-#SBATCH -t 00-16:00:00
+#SBATCH -t 04-04:00:00
 #SBATCH -o slurm.%j.out
 #SBATCH -e slurm.%j.err
 #SBATCH -N 1
