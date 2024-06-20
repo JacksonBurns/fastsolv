@@ -31,10 +31,10 @@ for dataset in (
     Path("data/vermeire/solprop_nonaq.csv"),
 ):
     boobier_acetone = pl.read_csv(dataset, columns=["solute_smiles", "solvent_smiles", "temperature", "logS"])
-    solute_list = boobier_acetone["solute_smiles"].to_list()[0:5]
-    solvent_list = boobier_acetone["solvent_smiles"].to_list()[0:5]
-    temp_list = boobier_acetone["temperature"].to_list()[0:5]
-    logS_truth = boobier_acetone["logS"].to_list()[0:5]
+    solute_list = boobier_acetone["solute_smiles"].to_list()
+    solvent_list = boobier_acetone["solvent_smiles"].to_list()
+    temp_list = boobier_acetone["temperature"].to_list()
+    logS_truth = boobier_acetone["logS"].to_list()
 
     solvent_list = ["CC(=O)C"] * len(solute_list)
     ref_solvent_list = [None] * len(solute_list)
