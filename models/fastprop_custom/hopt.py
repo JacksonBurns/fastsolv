@@ -11,7 +11,7 @@ from fastprop.model import fastprop
 from ray import tune
 from ray.tune.search.optuna import OptunaSearch
 
-from train import SOLUTE_COLUMNS, SOLVENT_COLUMNS, train_ensemble, AQ_ONLY
+from train import SOLUTE_COLUMNS, SOLVENT_COLUMNS, train_ensemble
 
 logger = init_logger(__name__)
 ray.init(_temp_dir='/state/partition1/user/jburns', num_cpus=40, num_gpus=2)
@@ -20,33 +20,27 @@ NUM_HOPT_TRIALS = 1024
 
 
 def define_by_run_func(trial):
-    if AQ_ONLY:
+    trial.suggest_categorical("input_activation", ("sigmoid", "tanh", "clamp3"))
+    trial.suggest_categorical("activation_fxn", ("relu", "leakyrelu"))
+    trial.suggest_int("interaction_hidden_size", 400, 3_400, 200)
+    trial.suggest_int("num_interaction_layers", 0, 6, 1)
+    interaction = trial.suggest_categorical("interaction_operation", ("concatenation", "multiplication", "subtraction", "addition"))
+    # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation
+    if interaction == "concatenation":
         trial.suggest_int("num_solute_layers", 0, 6, 1)
         trial.suggest_int("solute_hidden_size", 200, 3_000, 200)
-        trial.suggest_categorical("input_activation", ("sigmoid", "tanh", "clamp3"))
-        trial.suggest_categorical("activation_fxn", ("relu", "leakyrelu"))
+        trial.suggest_int("num_solvent_layers", 0, 6, 1)
+        trial.suggest_int("solvent_hidden_size", 200, 3_000, 200)
     else:
-        trial.suggest_categorical("input_activation", ("sigmoid", "tanh", "clamp3"))
-        trial.suggest_categorical("activation_fxn", ("relu", "leakyrelu"))
-        trial.suggest_int("interaction_hidden_size", 400, 3_400, 200)
-        trial.suggest_int("num_interaction_layers", 0, 6, 1)
-        interaction = trial.suggest_categorical("interaction_operation", ("concatenation", "multiplication", "subtraction", "addition"))
-        # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation
-        if interaction == "concatenation":
-            trial.suggest_int("num_solute_layers", 0, 6, 1)
-            trial.suggest_int("solute_hidden_size", 200, 3_000, 200)
-            trial.suggest_int("num_solvent_layers", 0, 6, 1)
-            trial.suggest_int("solvent_hidden_size", 200, 3_000, 200)
+        solute_layers = trial.suggest_int("num_solute_layers", 0, 6, 1)
+        if solute_layers == 0:
+            trial.suggest_int("num_solvent_layers", 0, 0)
+            trial.suggest_int("solute_hidden_size", 0, 0)
+            trial.suggest_int("solvent_hidden_size", 0, 0)
         else:
-            solute_layers = trial.suggest_int("num_solute_layers", 0, 6, 1)
-            if solute_layers == 0:
-                trial.suggest_int("num_solvent_layers", 0, 0)
-                trial.suggest_int("solute_hidden_size", 0, 0)
-                trial.suggest_int("solvent_hidden_size", 0, 0)
-            else:
-                trial.suggest_int("num_solvent_layers", 1, 6, 1)
-                matched_hidden_size = trial.suggest_int("solute_hidden_size", 200, 3_000, 200)
-                trial.suggest_int("solvent_hidden_size", matched_hidden_size, matched_hidden_size)
+            trial.suggest_int("num_solvent_layers", 1, 6, 1)
+            matched_hidden_size = trial.suggest_int("solute_hidden_size", 200, 3_000, 200)
+            trial.suggest_int("solvent_hidden_size", matched_hidden_size, matched_hidden_size)
 
 
 def main():
@@ -56,7 +50,7 @@ def main():
     logging.getLogger("pytorch_lightning").setLevel(logging.INFO)
 
     # load the data
-    df = pd.read_csv(Path("../../data/vermeire/solprop_nonaq.csv"), index_col=0)
+    df = pd.read_csv(Path("../../data/krasnov/bigsoldb_downsample.csv"), index_col=0)
     metadata_df = df[["solute_smiles", "solvent_smiles", "source"]]
     solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
     temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
