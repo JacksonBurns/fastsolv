@@ -251,14 +251,14 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
 if __name__ == "__main__":
     hopt_params = {
         "input_activation": "clamp3",
-        "activation_fxn": "relu",
-        "interaction_hidden_size": 2600,
-        "num_interaction_layers": 2,
-        "interaction_operation": "concatenation",
+        "activation_fxn": "leakyrelu",
+        "interaction_hidden_size": 2200,
+        "num_interaction_layers": 1,
+        "interaction_operation": "addition",
         "num_solute_layers": 1,
-        "solute_hidden_size": 200,
-        "num_solvent_layers": 1,
-        "solvent_hidden_size": 200,
+        "num_solvent_layers": 4,
+        "solute_hidden_size": 600,
+        "solvent_hidden_size": 600,
     }
     train_ensemble(
         remove_output=False,
