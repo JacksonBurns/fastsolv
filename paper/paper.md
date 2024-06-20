@@ -1,19 +1,19 @@
 ---
-title: "Arbitrary Solute-Solvent Solubility Prediction with fastprop"
+title: "Temperature-Dependent Solubility Prediction in Organic Solvents with `fastsolv`"
 author: 
   - name: Lucas Attia \orcidlink{0000-0002-9941-3846}
     affil-id: 1,**
   - name: Jackson W. Burns \orcidlink{0000-0002-0657-9426}
     affil-id: 1,**
-  # - name: Patrick S. Doyle \orcidlink{0000-0003-2147-9172}
-  #   affil-id: 1
-  # - name: William H. Green \orcidlink{0000-0003-2603-9694}
-  #   affil-id: 1,*
+  - name: Patrick S. Doyle \orcidlink{0000-0003-2147-9172}
+    affil-id: 1
+  - name: William H. Green \orcidlink{0000-0003-2603-9694}
+    affil-id: 1,*
 affiliations:
   - id: 1
     name: Massachusetts Institute of Technology, Cambridge, MA
-  # - id: "*"
-  #   name: "Corresponding: whgreen@mit.edu"
+  - id: "*"
+    name: "Corresponding: whgreen@mit.edu"
   - id: "**"
     name: "Equal Contribution"
 date: May 10, 2024
@@ -43,29 +43,30 @@ note: |
 # Introduction
 The solubilities of drug-like molecules in non-aqueous organic solvents are crucial properties for drug substance and drug product manufacturing. [@hewitt2009silico]
 Experimentally measuring non-aqueous solid solubility requires notoriously tedious experiments which are both time-consuming and resource-intensive. [@alsenz2007high]
-Thus, predicting organic solubility of drug-like molecules _a-priori_ based on their structure alone has been an active and robust area of academic and industrial research within the broader Quantitative Structure-Property Relationship (QSPR) domain. [@jorgensen2002prediction]
+Thus, predicting the solubility of drug-like molecules _a-priori_ based on their structure alone has been an active and robust area of academic and industrial research within the broader Quantitative Structure-Property Relationship (QSPR) domain. [@jorgensen2002prediction]
 
-The traditional approach relies on empirical solubility models like the Abraham Solvation model [@taft1985linear], which fits multiplicative solvent and solute coefficients to a given dataset which are then added to predict the solubility.
+The traditional approach relies on empirical solubility models like the Abraham Solvation model [@taft1985linear] which fits multiplicative solvent and solute coefficients to a given dataset that are then added to predict the solubility.
 These empirical approaches are incapable of extrapolation by their nature, limited by the experimental data from which they are derived.
 Recent work has instead explored applying molecular Machine Learning (ML) to this problem, which in theory could learn the underlying physics dictating the solubility and thus generalize to new solutes, solvents, and temperatures. [@lusci2013deep;@panapitiya2022evaluation]
 
-## Related Work
-Previous studies have employed deep neural networks (NNs) learning from molecular fingerprints [@zang2017silico] or molecular descriptors [@boobier2020machine;@tayyebi2023prediction] as well as graph convolutional NNs (GCNNs) [@chemprop_theory].
-Most similar to this study is the work of Panapitiya et al. which also uses molecular descriptors and a Multi-Layer Perceptron (MLP), though with a different feature set and network layout. [@panapitiya2022mdm]
-For a more complete review of the current landspace, see Llompart et al. [@llompart2024solubilityreview]
+An initial successful study was that of Boobier et al. in which they report multiple machine learning methods' success in predicting both aqueous and organic solubility. [@boobier2020machine]
+Others have employed exclusively neural networks (NNs) based on molecular fingerprints [@zang2017silico] or molecular descriptors [@tayyebi2023prediction] as well as graph convolutional NNs (GCNNs) [@chemprop_theory].
+Most similar to the present study is the work of Panapitiya et al. which uses molecular descriptors and an NN, though with a different feature set and network layout. [@panapitiya2022mdm]
 
-Suffice it to say that a direct mapping of structures to solubility has proven immensely difficult.
-To that end, recent studies have attempted to integrate the physics of solvation into the modeling approach to improve their modeling capacity.
+The numerous approaches in literature reflect the fact that a direct mapping of structure to solubility has proven immensely difficult to find.
+To that end recent studies have attempted to integrate the physics of solvation directly into models, the theory being that the inductive bias should simplify the modeling task and thus improve performance.
+
 For example, previous efforts by Vermeire et al. [@vermeire_solublility] combined three Directed-Message Passing NNs (D-MPNN) (via Chemprop [@chemprop_theory;@chemprop_software]) to predict different thermodynamic quantities which are combined to estimate solubility.
-While this model demonstrates impressive performance in ultimately predicting solubility, the approach inherently leaks data since all solvent and solute molecules are seen during training; extrapolative data splitting would likely reveal worse model performance.
-Another example is the work of Yashaswi and coauthors [@yashaswi_interaction], who used an 'interaction block' in their NN.
-This intermediate layer performed a row-wise multiplication, among other operations, on the solute and solvent learned representations which was then passed to an MLP.
+This approach simplifies the modeling task for each separate model and enables predictions at arbitrary temperatures.
+While the model demonstrates impressive performance in ultimately predicting solubility, the approach inherently leaks data since all solvent and solute molecules are seen during training; extrapolative data splitting shown in the [Difficulty of Extrapolation](#difficulty-of-extrapolation) section demonstrates significantly diminished performance.
+Another example is the work of Yashaswi and coauthors [@yashaswi_interaction] who developed an 'interaction block'.
+This layer combined two separate latent representations for the solute and solvent using simple mathematical operations before passing the result to an NN.
 This is analogous to training the model to map the structures to abraham-like solubility parameters, which are then weighted and combined for prediction.
 
-Building on this precious work, in this study we focus on extending the recently developed `fastprop` architecture that has been demonstrated to outperform D-MPNN-based models in several molecular property prediction tasks using Mordred descriptors [@moriwaki2018mordred] with a deep MLP. [@fastprop]
+Building on this previous work we focus on extending the recently developed `fastprop` architecture that has been demonstrated to outperform D-MPNN-based models in several molecular property prediction tasks using Mordred descriptors [@moriwaki2018mordred] with an NN. [@fastprop]
 Here, we hypothesized that incorporating physics of solvation into the interaction between solute and solvent interactions in a `fastprop`-based model could lead to further improved model performance. 
 
-To this end, we present a physics-infused `fastprop` architecture which trains two separate MLP 'branches' to learn separate solute and solvent representations before combining the latent representations via a configurable interaction block.
+To this end, we present a physics-infused `fastprop` architecture which trains two separate NN 'branches' to learn separate solute and solvent representations before combining the latent representations via a configurable interaction block.
 We believe this is the first systematic comparison of different interaction architectures for the task of molecular organic solubility prediction.
 This question of appropriately enforcing physics in our model is likely the most interesting and challenging aspect of this project.
 Since it is difficult to compare model performance directly to Vermeire et al. due to the previously specified data leak, we compared our model performance against datasets compiled by Boobier et al. which directly predicts solubility of various solutes in ethanol, benzene, and acetone at arbitrary temperatures. [@boobier2020machine]
@@ -134,6 +135,13 @@ Training would be stopped early based on validation set performance with a patie
 This configuration was chosen to ensure that even the largest networks attempted during hyperparameter optimization would have adequate time to converge during training.
 
 # Results
+## Difficulty of Extrapolation
+To demonstrate how intentionally witholding some solvents and solutes during training provides a more rigorous evaluation of model performance, the the previously referenced Vermeire model is applied to the Boobier datasets.
+The performance on the acetone dataset is shown in Figure \ref{vermeire_acetone}.
+
+![Vermeire Model Performance on Leeds Acetone Dataset.\label{vermeire_acetone}](../figures/leeds_acetone_vermeire_results.png){ width=4in }
+
+## `fastsolv` Performance
 We first evaluate the performance of the optimized unbranched model which concatenates the solute and solvent descriptors and feeds them to an MLP.
 The best parameters found are summarized in Table \ref{baseline_opt}. 
 
@@ -282,27 +290,18 @@ For a realistic drug discovery application, predicting solubility of an arbitrar
 The ability of fastsolv to extrapolate to new solutes presents utility in such applications.
 Overall, this work presents the value of providing machine learning models with physical inductive bias in molecular machine learning tasks. 
 
-<!-- These two sections can be removed after submitting the class report - they are likely not needed for a journal submission. -->
-# Contributions
-Burns and Attia both contributed to ideation, code development, and writing.
-
-# Code
-Code is available via GitHub at github.com/JacksonBurns/fastsolv
-
-<!-- These sections should be added back for the eventual paper submission.
 # Declarations
 
 ## Availability of data and materials
-All associated code for this paper can be accessed on GitHub at GitHub.com/JacksonBurns/highsol.
-
+All associated code for this paper can be accessed on GitHub at [github.com/JacksonBurns/fastsolv](https://github.com/JacksonBurns/fastsolv).
 All data used are available to the public under a permissive license.
 See the GitHub repository for more information on retrieving the data.
 
 ## Funding
-This material is based upon work supported by the U.S. Department of Energy, Office of Science, Office of Advanced Scientific Computing Research, Department of Energy Computational Science Graduate Fellowship under Award Number DE-SC0023112.
+This material is based upon work supported by the U.S. Department of Energy, Office of Science, Office of Advanced Scientific Computing Research, Department of Energy Computational Science Graduate Fellowship under Award Numbers DE-SC0023112 and DE-SC0022158.
 
 ## Acknowledgements
-Yes, perhaps, indeed.
+The authors thank Connor Coley for his helpful comments and suggestions during the formulation of this concept.
 
 ## Disclaimer
 This report was prepared as an account of work sponsored by an agency of the United States Government.
@@ -310,6 +309,6 @@ Neither the United States Government nor any agency thereof, nor any of their em
 Reference herein to any specific commercial product, process, or service by trade name, trademark, manufacturer, or otherwise does not necessarily constitute or imply its
 endorsement, recommendation, or favoring by the United States Government or any agency
 thereof.
-The views and opinions of authors expressed herein do not necessarily state or reflect those of the United States Government or any agency thereof. -->
+The views and opinions of authors expressed herein do not necessarily state or reflect those of the United States Government or any agency thereof.
 
 # Cited Works

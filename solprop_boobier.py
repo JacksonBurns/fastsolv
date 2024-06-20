@@ -55,6 +55,7 @@ for dataset in (
         cp_gas_298_list=cp_gas_298_list,
         cp_solid_298_list=cp_solid_298_list,
     )
+    df_results.to_csv(dataset.stem + "_vermeire_predictions.csv")
 
     preds = df_results["logST (method1) [log10(mol/L)]"].to_list()
     abs_err = np.array([np.abs(i - j) for i, j in zip(preds, logS_truth)])
@@ -79,4 +80,5 @@ for dataset in (
     plt.xlim(min_val, max_val)
     plt.text(min_val, max_val - 0.1, stat_str, horizontalalignment="left", verticalalignment="top")
     plt.title(dataset.stem)
-    plt.savefig(dataset.stem + "_results.png")
+    plt.savefig(Path("figures", dataset.stem + "_vermeire_results.png"))
+    
