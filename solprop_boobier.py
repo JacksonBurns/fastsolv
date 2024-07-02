@@ -30,13 +30,12 @@ for dataset in (
     Path("data/boobier/leeds_ethanol.csv"),
     Path("data/vermeire/solprop_nonaq.csv"),
 ):
-    boobier_acetone = pl.read_csv(dataset, columns=["solute_smiles", "solvent_smiles", "temperature", "logS"])
-    solute_list = boobier_acetone["solute_smiles"].to_list()
-    solvent_list = boobier_acetone["solvent_smiles"].to_list()
-    temp_list = boobier_acetone["temperature"].to_list()
-    logS_truth = boobier_acetone["logS"].to_list()
+    df = pl.read_csv(dataset, columns=["solute_smiles", "solvent_smiles", "temperature", "logS"])
+    solute_list = df["solute_smiles"].to_list()
+    solvent_list = df["solvent_smiles"].to_list()
+    temp_list = df["temperature"].to_list()
+    logS_truth = df["logS"].to_list()
 
-    solvent_list = ["CC(=O)C"] * len(solute_list)
     ref_solvent_list = [None] * len(solute_list)
     ref_solubility_list = [None] * len(solute_list)
     ref_temp_list = [None] * len(solute_list)
