@@ -4,6 +4,7 @@ model.py - solubility prediction model definition
 batches are organized (solute, solvent, temperature)
 """
 
+import os
 from typing import Literal
 
 import torch
@@ -70,6 +71,9 @@ def _build_mlp(input_size, hidden_size, act_fun, num_layers):
                 modules.append(torch.nn.LeakyReLU())
             else:
                 raise TypeError(f"What is {act_fun}?")
+            if os.environ.get('ENABLE_REGULARIZATION', 0):
+                modules.append(torch.nn.BatchNorm1d())
+                modules.append(torch.nn.Dropout())
     return modules
 
 
@@ -238,17 +242,30 @@ class fastpropSolubility(_fastprop):
         self.log(f"{name}_logS_scaled_loss", y_loss)
         self.log(f"{name}_dlogSdT_scaled_loss", y_grad_loss)
         return loss, y_hat
+    
+    def _plain_loss(self, batch: tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor, torch.Tensor], name: str):
+        (_solute, _solvent, temperature), y, y_grad = batch
+        y_hat: torch.Tensor = self.forward((_solute, _solvent, temperature))
+        loss = torch.nn.functional.mse_loss(y_hat, y, reduction="mean")
+        self.log(f"{name}_{self.training_metric}_scaled_loss", loss)
+        return loss, y_hat
+    
+    def _loss(self, batch: tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor, torch.Tensor], name: str):
+        if os.environ.get('DISABLE_CUSTOM_LOSS', 0):
+            self._plain_loss(batch, name)
+        else:
+            self._custom_loss(batch, name)
 
     def training_step(self, batch, batch_idx):
-        return self._custom_loss(batch, "train")[0]
+        return self._loss(batch, "train")[0]
 
     def validation_step(self, batch, batch_idx):
-        loss, y_hat = self._custom_loss(batch, "validation")
+        loss, y_hat = self._loss(batch, "validation")
         self._human_loss(y_hat, batch, "validation")
         return loss
 
     def test_step(self, batch, batch_idx):
-        loss, y_hat = self._custom_loss(batch, "test")
+        loss, y_hat = self._loss(batch, "test")
         self._human_loss(y_hat, batch, "test")
         return loss
 
