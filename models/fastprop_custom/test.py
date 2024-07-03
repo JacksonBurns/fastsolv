@@ -66,6 +66,7 @@ def test_ensemble(checkpoint_dir: Path):
                 solvent_features,
                 temperatures,
                 solubilities,
+                torch.zeros_like(solubilities),
             ),
             batch_size=len(solubilities),
         )

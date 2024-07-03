@@ -36,6 +36,13 @@ SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
 SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
 
 
+def _f(r):
+    if len(r["logS"]) == 1:
+        return [np.nan]
+    # mask out enormous (non-physical) values and nan/inf
+    return [i if (np.isfinite(i) and np.abs(i) < 1.0) else np.nan for i in np.gradient(r["logS"], r["temperature"])]
+
+
 def logS_within_0_7_percentage(truth: torch.Tensor, prediction: torch.Tensor, ignored: None, multitask: bool = False):
     return (truth - prediction).abs().less_equal(0.7).count_nonzero() / prediction.size(dim=0)
 
@@ -139,13 +146,44 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
         solubilities[val_indexes] = target_scaler(solubilities[val_indexes])
         solubilities[test_indexes] = target_scaler(solubilities[test_indexes])
 
+        # calculate the expected gradients post-scaling
+        # start by inserting the rescaled data back into the metatdata dataframe _in the right order_
+        tgrads = pd.concat(
+            (
+                metadata_df,
+                pd.DataFrame(
+                    {
+                        "logS": np.ravel(solubilities.numpy()),
+                        "temperature": np.ravel(temperatures.numpy()),
+                        "source_index": np.arange(len(temperatures)),
+                    }
+                ),
+            ),
+            axis=1,
+        )
+        # group the data by experiment
+        tgrads = tgrads.groupby(["source", "solvent_smiles", "solute_smiles"])[["logS", "temperature", "source_index"]].aggregate(list)
+        # calculate the gradient at each measurement of logS wrt temperature
+        tgrads["logSgradT"] = tgrads.apply(_f, axis=1)
+        # get them in the same order as the source data
+        tgrads = tgrads.explode(["logSgradT", "source_index"]).sort_values(by="source_index")
+        # convert and mask
+        tgrads = tgrads["logSgradT"].to_numpy(dtype=np.float32)
+        _mask = np.isnan(tgrads)
+        logger.warning(f"Masking {np.count_nonzero(_mask)} of {len(_mask)} gradients!")
+        tgrads[_mask] = 0.0
+        logger.info(f"{np.count_nonzero(tgrads > 0)} of {len(tgrads)} were positive!")
+        tgrads = torch.tensor(tgrads, dtype=torch.float32).unsqueeze(-1)
+
         train_dataloader = fastpropDataLoader(
             SolubilityDataset(
                 solute_features[train_indexes],
                 solvent_features[train_indexes],
                 temperatures[train_indexes],
                 solubilities[train_indexes],
+                tgrads[train_indexes],
             ),
+            batch_size=4096,
             shuffle=True,
             drop_last=True,
         )
@@ -155,7 +193,9 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                 solvent_features[val_indexes],
                 temperatures[val_indexes],
                 solubilities[val_indexes],
+                tgrads[val_indexes],
             ),
+            batch_size=4096,
         )
         test_dataloader = fastpropDataLoader(
             SolubilityDataset(
@@ -163,8 +203,9 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                 solvent_features[test_indexes],
                 temperatures[test_indexes],
                 solubilities[test_indexes],
+                tgrads[test_indexes],
             ),
-            batch_size=10_000,
+            batch_size=4096,
         )
 
         # initialize the model and train/test
@@ -180,7 +221,17 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
             temperature_vars=temperature_vars,
         )
         logger.info("Model architecture:\n{%s}", str(model))
-        test_results, validation_results = train_and_test(_output_dir, model, train_dataloader, val_dataloader, test_dataloader, 100, 20)
+        test_results, validation_results = train_and_test(
+            _output_dir,
+            model,
+            train_dataloader,
+            val_dataloader,
+            test_dataloader,
+            100,
+            20,
+            quiet=remove_output,
+            inference_mode=False,
+        )
         all_test_results.append(test_results[0])
         all_validation_results.append(validation_results[0])
 
@@ -200,14 +251,14 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
 if __name__ == "__main__":
     hopt_params = {
         "input_activation": "clamp3",
-        "activation_fxn": "relu",
-        "interaction_hidden_size": 2600,
-        "num_interaction_layers": 2,
-        "interaction_operation": "concatenation",
+        "activation_fxn": "leakyrelu",
+        "interaction_hidden_size": 2200,
+        "num_interaction_layers": 1,
+        "interaction_operation": "addition",
         "num_solute_layers": 1,
-        "solute_hidden_size": 200,
-        "num_solvent_layers": 1,
-        "solvent_hidden_size": 200,
+        "num_solvent_layers": 4,
+        "solute_hidden_size": 600,
+        "solvent_hidden_size": 600,
     }
     train_ensemble(
         remove_output=False,
