@@ -71,8 +71,8 @@ def _build_mlp(input_size, hidden_size, act_fun, num_layers):
                 modules.append(torch.nn.LeakyReLU())
             else:
                 raise TypeError(f"What is {act_fun}?")
-            if os.environ.get('ENABLE_REGULARIZATION', 0):
-                modules.append(torch.nn.BatchNorm1d())
+            if int(os.environ.get('ENABLE_REGULARIZATION', 0)):
+                modules.append(torch.nn.BatchNorm1d(hidden_size))
                 modules.append(torch.nn.Dropout())
     return modules
 
@@ -251,10 +251,10 @@ class fastpropSolubility(_fastprop):
         return loss, y_hat
     
     def _loss(self, batch: tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor, torch.Tensor], name: str):
-        if os.environ.get('DISABLE_CUSTOM_LOSS', 0):
-            self._plain_loss(batch, name)
+        if int(os.environ.get('DISABLE_CUSTOM_LOSS', 0)):
+            return self._plain_loss(batch, name)
         else:
-            self._custom_loss(batch, name)
+            return self._custom_loss(batch, name)
 
     def training_step(self, batch, batch_idx):
         return self._loss(batch, "train")[0]
