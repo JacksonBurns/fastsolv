@@ -10,3 +10,7 @@ checkpoints/
 slurm*err
 slurm*out
 aqsol
+final_results/
+best_pre_tloss/
+*.zip
+*.pptx
