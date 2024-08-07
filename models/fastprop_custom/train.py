@@ -249,16 +249,44 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
 
 
 if __name__ == "__main__":
+    # 'plain' fastsolv model
+    # run with:  ENABLE_REGULARIZATION=0 DISABLE_CUSTOM_LOSS=1
     hopt_params = {
-        "input_activation": "clamp3",
-        "activation_fxn": "leakyrelu",
-        "interaction_hidden_size": 2200,
+        "input_activation": "tanh",
+        "activation_fxn": "relu",
+        "interaction_hidden_size": 1000,
         "num_interaction_layers": 1,
         "interaction_operation": "addition",
         "num_solute_layers": 1,
         "num_solvent_layers": 4,
         "solute_hidden_size": 600,
         "solvent_hidden_size": 600,
+    }
+    # regularized fastsolv model
+    # run with: ENABLE_REGULARIZATION=1 DISABLE_CUSTOM_LOSS=1
+    hopt_params = {
+        "input_activation": "tanh",
+        "activation_fxn": "leakyrelu",
+        "interaction_hidden_size": 2400,
+        "num_interaction_layers": 2,
+        "interaction_operation": "concatenation",
+        "num_solute_layers": 1,
+        "solute_hidden_size": 1200,
+        "num_solvent_layers": 2,
+        "solvent_hidden_size": 1000,
+    }
+    # custom fastsolv model
+    # run with: ENABLE_REGULARIZATION=0 DISABLE_CUSTOM_LOSS=0
+    hopt_params = {
+        "input_activation": "clamp3",
+        "activation_fxn": "relu",
+        "interaction_hidden_size": 1800,
+        "num_interaction_layers": 0,
+        "interaction_operation": "multiplication",
+        "num_solute_layers": 3,
+        "num_solvent_layers": 6,
+        "solute_hidden_size": 400,
+        "solvent_hidden_size": 400,
     }
     train_ensemble(
         remove_output=False,

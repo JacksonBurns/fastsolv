@@ -30,13 +30,12 @@ for dataset in (
     Path("data/boobier/leeds_ethanol.csv"),
     Path("data/vermeire/solprop_nonaq.csv"),
 ):
-    boobier_acetone = pl.read_csv(dataset, columns=["solute_smiles", "solvent_smiles", "temperature", "logS"])
-    solute_list = boobier_acetone["solute_smiles"].to_list()
-    solvent_list = boobier_acetone["solvent_smiles"].to_list()
-    temp_list = boobier_acetone["temperature"].to_list()
-    logS_truth = boobier_acetone["logS"].to_list()
+    df = pl.read_csv(dataset, columns=["solute_smiles", "solvent_smiles", "temperature", "logS"])
+    solute_list = df["solute_smiles"].to_list()
+    solvent_list = df["solvent_smiles"].to_list()
+    temp_list = df["temperature"].to_list()
+    logS_truth = df["logS"].to_list()
 
-    solvent_list = ["CC(=O)C"] * len(solute_list)
     ref_solvent_list = [None] * len(solute_list)
     ref_solubility_list = [None] * len(solute_list)
     ref_temp_list = [None] * len(solute_list)
@@ -55,6 +54,7 @@ for dataset in (
         cp_gas_298_list=cp_gas_298_list,
         cp_solid_298_list=cp_solid_298_list,
     )
+    df_results.to_csv(dataset.stem + "_vermeire_predictions.csv")
 
     preds = df_results["logST (method1) [log10(mol/L)]"].to_list()
     abs_err = np.array([np.abs(i - j) for i, j in zip(preds, logS_truth)])
@@ -79,4 +79,5 @@ for dataset in (
     plt.xlim(min_val, max_val)
     plt.text(min_val, max_val - 0.1, stat_str, horizontalalignment="left", verticalalignment="top")
     plt.title(dataset.stem)
-    plt.savefig(dataset.stem + "_results.png")
+    plt.savefig(Path("figures", dataset.stem + "_vermeire_results.png"))
+    
