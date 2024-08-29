@@ -103,4 +103,4 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
-    test_ensemble(Path("output/best/checkpoints"))
+    test_ensemble(Path("output/fastprop_sobolev_optimal_1temp/checkpoints"))

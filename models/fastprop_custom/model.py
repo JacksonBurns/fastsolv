@@ -5,6 +5,7 @@ batches are organized (solute, solvent, temperature)
 """
 
 import os
+from types import SimpleNamespace
 from typing import Literal
 
 import torch
@@ -40,6 +41,16 @@ class PairwiseMax(torch.nn.Module):
         return torch.cat((maxes, batch[2]), dim=1)
 
 
+class IndependentVariableAppendingSequential(torch.nn.Sequential):
+    def forward(self, input):
+        embedding, independent_variable = input
+        for module in self:
+            if isinstance(module, torch.nn.Linear):
+                embedding = torch.cat((embedding, independent_variable), dim=1)
+            embedding = module(embedding)
+        return embedding
+
+
 # inputs are normally distributed (by our scaling) so clamping at n
 # is like applying a n-sigma cutoff, i.e. anything else is an outlier
 class ClampN(torch.nn.Module):
@@ -57,7 +68,7 @@ class ClampN(torch.nn.Module):
 def _build_mlp(input_size, hidden_size, act_fun, num_layers):
     modules = []
     for i in range(num_layers):
-        modules.append(torch.nn.Linear(input_size if i == 0 else hidden_size, hidden_size))
+        modules.append(torch.nn.Linear(1 + (input_size if i == 0 else hidden_size), hidden_size))
         if (num_layers == 1) or (i < num_layers - 1):  # no activation after last layer, unless perceptron
             if act_fun == "sigmoid":
                 modules.append(torch.nn.Sigmoid())
@@ -71,7 +82,7 @@ def _build_mlp(input_size, hidden_size, act_fun, num_layers):
                 modules.append(torch.nn.LeakyReLU())
             else:
                 raise TypeError(f"What is {act_fun}?")
-            if int(os.environ.get('ENABLE_REGULARIZATION', 0)):
+            if int(os.environ.get("ENABLE_REGULARIZATION", 0)):
                 modules.append(torch.nn.BatchNorm1d(hidden_size))
                 modules.append(torch.nn.Dropout())
     return modules
@@ -119,6 +130,8 @@ class fastpropSolubility(_fastprop):
         )
         del self.fnn
         del self.readout
+        # spoof the readout size
+        self.readout = SimpleNamespace(out_features=1)
 
         # for later predicting
         self.register_buffer("solute_means", solute_means)
@@ -129,12 +142,12 @@ class fastpropSolubility(_fastprop):
         self.register_buffer("temperature_vars", temperature_vars)
 
         # solute - temperature is concatenated to the input features
-        solute_modules = _build_mlp(num_features + 1, solute_hidden_size, activation_fxn, num_solute_layers)
-        solute_hidden_size = solute_hidden_size if num_solute_layers > 0 else num_features + 1
+        solute_modules = _build_mlp(num_features, solute_hidden_size, activation_fxn, num_solute_layers)
+        solute_hidden_size = solute_hidden_size if num_solute_layers > 0 else num_features
 
         # solvent - temperature is concatenated to the input features
-        solvent_modules = _build_mlp(num_features + 1, solvent_hidden_size, activation_fxn, num_solvent_layers)
-        solvent_hidden_size = solvent_hidden_size if num_solvent_layers > 0 else num_features + 1
+        solvent_modules = _build_mlp(num_features, solvent_hidden_size, activation_fxn, num_solvent_layers)
+        solvent_hidden_size = solvent_hidden_size if num_solvent_layers > 0 else num_features
 
         # optionally bound input
         if input_activation == "clamp3":
@@ -148,13 +161,13 @@ class fastpropSolubility(_fastprop):
             solvent_modules.insert(0, torch.nn.Tanh())
 
         # assemble modules (if empty, just passes input through)
-        self.solute_representation_module = torch.nn.Sequential(*solute_modules)
-        self.solvent_representation_module = torch.nn.Sequential(*solvent_modules)
+        self.solute_representation_module = IndependentVariableAppendingSequential(*solute_modules)
+        self.solvent_representation_module = IndependentVariableAppendingSequential(*solvent_modules)
 
         # interaction module
         interaction_modules = []
         if interaction_operation == "concatenation":  # size increases if concatenated
-            num_interaction_features = solvent_hidden_size + solute_hidden_size + 1  # plus temperature
+            num_interaction_features = solvent_hidden_size + solute_hidden_size
             interaction_modules.append(Concatenation())
         else:
             if solute_hidden_size != solvent_hidden_size:
@@ -162,7 +175,7 @@ class fastpropSolubility(_fastprop):
                     f"Invalid choice of interaction ({interaction_operation}) for mis-matched solute/solvent"
                     f" embedding sizes {solute_hidden_size}/{solvent_hidden_size}."
                 )
-            num_interaction_features = solvent_hidden_size + 1  # plus temperature
+            num_interaction_features = solvent_hidden_size
             if interaction_operation == "multiplication":
                 interaction_modules.append(Multiplication())
             elif interaction_operation == "subtraction":
@@ -171,19 +184,22 @@ class fastpropSolubility(_fastprop):
                 interaction_modules.append(Addition())
             else:
                 raise TypeError(f"Unknown interaction operation '{interaction_operation}'!")
-        interaction_modules += _build_mlp(num_interaction_features, interaction_hidden_size, activation_fxn, num_interaction_layers)
         self.interaction_module = torch.nn.Sequential(*interaction_modules)
 
+        # solution
+        solution_modules = _build_mlp(num_interaction_features, interaction_hidden_size, activation_fxn, num_interaction_layers)
         # readout
-        self.readout = torch.nn.Linear(num_interaction_features if num_interaction_layers == 0 else interaction_hidden_size, 1)
+        solution_modules.append(torch.nn.Linear(1 + (num_interaction_features if num_interaction_layers == 0 else interaction_hidden_size), 1))
+        self.solution_module = IndependentVariableAppendingSequential(*solution_modules)
+
         self.save_hyperparameters()
 
     def forward(self, batch):
         solute_features, solvent_features, temperature = batch
-        solute_representation = self.solute_representation_module(torch.cat((solute_features, temperature), dim=1))
-        solvent_representation = self.solvent_representation_module(torch.cat((solvent_features, temperature), dim=1))
-        output = self.interaction_module((solute_representation, solvent_representation, temperature))
-        y_hat = self.readout(output)
+        solute_representation = self.solute_representation_module((solute_features, temperature))
+        solvent_representation = self.solvent_representation_module((solvent_features, temperature))
+        solution_representation = self.interaction_module((solute_representation, solvent_representation))
+        y_hat = self.solution_module((solution_representation, temperature))
         return y_hat
 
     def predict_step(self, batch):
@@ -236,22 +252,22 @@ class fastpropSolubility(_fastprop):
             retain_graph=True,
         )
         _scale_factor = 100.0
-        y_grad_loss = _scale_factor * torch.nn.functional.mse_loss(y_grad_hat, y_grad, reduction="mean")
+        y_grad_loss = _scale_factor * (y_grad_hat - y_grad).pow(2).nanmean()  # MSE ignoring nan
         loss = y_loss + y_grad_loss
         self.log(f"{name}_{self.training_metric}_scaled_loss", loss)
         self.log(f"{name}_logS_scaled_loss", y_loss)
         self.log(f"{name}_dlogSdT_scaled_loss", y_grad_loss)
         return loss, y_hat
-    
+
     def _plain_loss(self, batch: tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor, torch.Tensor], name: str):
         (_solute, _solvent, temperature), y, y_grad = batch
         y_hat: torch.Tensor = self.forward((_solute, _solvent, temperature))
         loss = torch.nn.functional.mse_loss(y_hat, y, reduction="mean")
         self.log(f"{name}_{self.training_metric}_scaled_loss", loss)
         return loss, y_hat
-    
+
     def _loss(self, batch: tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor, torch.Tensor], name: str):
-        if int(os.environ.get('DISABLE_CUSTOM_LOSS', 0)):
+        if int(os.environ.get("DISABLE_CUSTOM_LOSS", 0)):
             return self._plain_loss(batch, name)
         else:
             return self._custom_loss(batch, name)

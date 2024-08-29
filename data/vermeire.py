@@ -14,6 +14,7 @@
 from pathlib import Path
 
 import pandas as pd
+from fastprop.defaults import ALL_2D
 
 from utils import drop_bigsol_overlap, get_descs, DESCRIPTOR_COLUMNS
 
@@ -40,3 +41,8 @@ fastprop_data[["temperature"]].to_csv(_dest / "chemprop_features.csv")
 # write just the non-aqueous data
 fastprop_data = drop_bigsol_overlap(fastprop_data)
 fastprop_data[~fastprop_data["solvent_smiles"].eq("O")].reset_index(drop=True).to_csv(_dest / "solprop_nonaq.csv")
+
+fastprop_aq = fastprop_data[fastprop_data["solvent_smiles"].eq("O")].reset_index(drop=True)
+fastprop_aq = fastprop_aq[["solute_smiles", "logS", "source", "temperature"] + DESCRIPTOR_COLUMNS[0:1613]]
+fastprop_aq.columns = ["smiles", "target", "source", "independent_variable"] + ALL_2D
+fastprop_aq.to_csv(_dest / "solprop_aq.csv")
