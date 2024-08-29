@@ -80,9 +80,4 @@ fastprop_data.insert(1, "source", sources)
 _dest = Path("krasnov")
 if not Path.exists(_dest):
     Path.mkdir(_dest)
-# fastprop_data[~fastprop_data["solvent_smiles"].eq("O")].reset_index(drop=True).to_csv(_dest / "bigsoldb_downsample.csv")
-
-fastprop_aq = fastprop_data[fastprop_data["solvent_smiles"].eq("O")].reset_index(drop=True)
-fastprop_aq = fastprop_aq[["solute_smiles", "logS", "source", "temperature"] + DESCRIPTOR_COLUMNS[0:1613]]
-fastprop_aq.columns = ["smiles", "target", "source", "independent_variable"] + ALL_2D
-fastprop_aq.to_csv(_dest / "bigsoldb_downsample_aq.csv")
+fastprop_data.to_csv(_dest / "bigsoldb_downsample.csv")
