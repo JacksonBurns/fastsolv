@@ -77,7 +77,7 @@ SCORE_LOOKUP["regression"] = (
 )
 
 
-def train_ensemble(data=None, remove_output=False, **model_kwargs):
+def train_ensemble(*, data=None, remove_output=False, training_percent=None, **model_kwargs):
     # setup logging and output directories
     _output_dir = Path(f"output/fastprop_{int(datetime.datetime.now(datetime.UTC).timestamp())}")
     os.makedirs(_output_dir, exist_ok=True)
@@ -88,13 +88,13 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
     # load the training data
     if data is None:
         df = pd.read_csv(_data_dir / TRAINING_FPATH, index_col=0)
-        metadata_df = df[["solute_smiles", "solvent_smiles", "source"]]
+        metadata_df_og = df[["solute_smiles", "solvent_smiles", "source"]]
         solubilities_og = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)  # keep everything 2D
         temperatures_og = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
         solute_features_og = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
         solvent_features_og = torch.tensor(df[SOLVENT_COLUMNS].to_numpy(), dtype=torch.float32)
     else:
-        solute_features_og, solvent_features_og, temperatures_og, solubilities_og, metadata_df = data
+        solute_features_og, solvent_features_og, temperatures_og, solubilities_og, metadata_df_og = data
 
     logger.info(f"Run 'tensorboard --logdir {_output_dir}/tensorboard_logs' to track training progress.")
     random_seed = RANDOM_SEED
@@ -102,10 +102,26 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
     for replicate_number in range(NUM_REPLICATES):
         logger.info(f"Training model {replicate_number+1} of {NUM_REPLICATES} ({random_seed=})")
         # keep backups so repeat trials don't rescale already scaled data
+        metadata_df = metadata_df_og.copy()
         solubilities = solubilities_og.detach().clone()
         temperatures = temperatures_og.detach().clone()
         solute_features = solute_features_og.detach().clone()
         solvent_features = solvent_features_og.detach().clone()
+
+        if training_percent is not None:
+            logger.warning(f"Down-sampling training data to {training_percent:.2%} size!")
+            downsample_df = metadata_df.copy()
+            downsample_df["original_index"] = np.arange(len(metadata_df))
+            downsample_df = downsample_df.groupby(["solute_smiles", "solvent_smiles", "source"]).aggregate(list)
+            downsample_df = downsample_df.sample(frac=training_percent, replace=False, random_state=random_seed)
+            chosen_indexes = downsample_df.explode("original_index")["original_index"].to_numpy().flatten().astype(int)
+            logger.warning(f"Actual downsample percentage is {len(chosen_indexes)/len(metadata_df):.2%}, count: {len(chosen_indexes)}!")
+            metadata_df = metadata_df.iloc[chosen_indexes]
+            metadata_df.reset_index(inplace=True, drop=True)
+            solubilities = solubilities[chosen_indexes]
+            temperatures = temperatures[chosen_indexes]
+            solute_features = solute_features[chosen_indexes]
+            solvent_features = solvent_features[chosen_indexes]
 
         # split the data s.t. model only sees a subset of the studies used to aggregate the training data
         if SPLIT_TYPE == "source":
@@ -182,9 +198,9 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
                 solubilities[train_indexes],
                 tgrads[train_indexes],
             ),
-            batch_size=4096,
+            batch_size=128,
             shuffle=True,
-            drop_last=True,
+            drop_last=bool(int(os.environ.get("ENABLE_REGULARIZATION", 0))),
         )
         val_dataloader = fastpropDataLoader(
             SolubilityDataset(
@@ -248,58 +264,58 @@ def train_ensemble(data=None, remove_output=False, **model_kwargs):
 
 
 if __name__ == "__main__":
-    # 'plain' fastsolv model
-    # run with:  ENABLE_REGULARIZATION=0 DISABLE_CUSTOM_LOSS=1
+    # optimized fastprop model
+    # run with: DISABLE_CUSTOM_LOSS=1
     # hopt_params = {
-    #     "input_activation": "tanh",
-    #     "activation_fxn": "relu",
-    #     "interaction_hidden_size": 1000,
-    #     "num_interaction_layers": 1,
-    #     "interaction_operation": "addition",
-    #     "num_solute_layers": 1,
-    #     "num_solvent_layers": 4,
-    #     "solute_hidden_size": 600,
-    #     "solvent_hidden_size": 600,
+    #     "input_activation": "sigmoid",
+    #     "activation_fxn": "leakyrelu",
+    #     "interaction_hidden_size": 800,
+    #     "num_interaction_layers": 4,
+    #     "interaction_operation": "concatenation",
+    #     "num_solute_layers": 0,
+    #     "num_solvent_layers": 0,
+    #     "solute_hidden_size": 0,
+    #     "solvent_hidden_size": 0,
     # }
-    # regularized fastsolv model
-    # run with: ENABLE_REGULARIZATION=1 DISABLE_CUSTOM_LOSS=1
+    # optimized fastprop-physics model
+    # run with: DISABLE_CUSTOM_LOSS=1
     # hopt_params = {
     #     "input_activation": "tanh",
     #     "activation_fxn": "leakyrelu",
-    #     "interaction_hidden_size": 2400,
+    #     "interaction_hidden_size": 1200,
     #     "num_interaction_layers": 2,
-    #     "interaction_operation": "concatenation",
-    #     "num_solute_layers": 1,
-    #     "solute_hidden_size": 1200,
-    #     "num_solvent_layers": 2,
-    #     "solvent_hidden_size": 1000,
-    # }
-    # custom fastsolv model
-    # run with: ENABLE_REGULARIZATION=0 DISABLE_CUSTOM_LOSS=0
-    # hopt_params = {
-    #     "input_activation": "clamp3",
-    #     "activation_fxn": "relu",
-    #     "interaction_hidden_size": 1800,
-    #     "num_interaction_layers": 0,
     #     "interaction_operation": "multiplication",
     #     "num_solute_layers": 3,
-    #     "num_solvent_layers": 6,
-    #     "solute_hidden_size": 400,
-    #     "solvent_hidden_size": 400,
+    #     "num_solvent_layers": 3,
+    #     "solute_hidden_size": 800,
+    #     "solvent_hidden_size": 800,
     # }
-    # ablation model - custom loss but no branches
-    # run with: ENABLE_REGULARIZATION=0 DISABLE_CUSTOM_LOSS=0
-    hopt_params = {
-        "input_activation": "clamp3",
-        "activation_fxn": "leakyrelu",
-        "interaction_hidden_size": 1800,
-        "num_interaction_layers": 6,
-        "interaction_operation": "concatenation",
-        "num_solute_layers": 0,
-        "solute_hidden_size": 0,
-        "num_solvent_layers": 0,
-        "solvent_hidden_size": 0,
-    }
+    # optimized fastprop-sobolev model
+    # run with: DISABLE_CUSTOM_LOSS=0
+    # hopt_params = {
+    #     "input_activation": "clamp3",
+    #     "activation_fxn": "leakyrelu",
+    #     "interaction_hidden_size": 1000,
+    #     "num_interaction_layers": 4,
+    #     "interaction_operation": "concatenation",
+    #     "num_solute_layers": 0,
+    #     "num_solvent_layers": 0,
+    #     "solute_hidden_size": 0,
+    #     "solvent_hidden_size": 0,
+    # }
+    # optimized fastprop-sobolev-physics model
+    # run with: DISABLE_CUSTOM_LOSS=0
+    # hopt_params = {
+    #     "input_activation": "clamp3",
+    #     "activation_fxn": "leakyrelu",
+    #     "interaction_hidden_size": 1000,
+    #     "num_interaction_layers": 1,
+    #     "interaction_operation": "multiplication",
+    #     "num_solute_layers": 1,
+    #     "num_solvent_layers": 2,
+    #     "solute_hidden_size": 1000,
+    #     "solvent_hidden_size": 1000,
+    # }
     train_ensemble(
         remove_output=False,
         num_features=1613,

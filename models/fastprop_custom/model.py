@@ -20,7 +20,7 @@ class Concatenation(torch.nn.Module):
 
 class Multiplication(torch.nn.Module):
     def forward(self, batch):
-        return torch.cat((batch[0] * batch[1], batch[2]), dim=1)
+        return batch[0] * batch[1]
 
 
 class Subtraction(torch.nn.Module):

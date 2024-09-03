@@ -7,6 +7,8 @@ paper/paper.pdf
 models/fastprop_custom/output*
 models/fastprop_custom/.output*
 models/fastprop_custom/transfer_optimal
+models/fastprop_custom/final_absolute_performance_results
+models/fastprop_custom/aleatoric_error_study
 fastprop_sobolev/*output*
 checkpoints/
 slurm*err

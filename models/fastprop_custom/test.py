@@ -50,7 +50,7 @@ def test_ensemble(checkpoint_dir: Path):
         Path("boobier/leeds_acetone.csv"),
         Path("boobier/leeds_benzene.csv"),
         Path("boobier/leeds_ethanol.csv"),
-        Path("krasnov/bigsoldb_downsample.csv"),
+        # Path("krasnov/bigsoldb_downsample.csv"),
         Path("vermeire/solprop_nonaq.csv"),
     ):
         # load the holdout data
@@ -103,4 +103,7 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
-    test_ensemble(Path("output/fastprop_sobolev_optimal_1temp/checkpoints"))
+    # test_ensemble(Path(f"final_absolute_performance_results/fastprop_sobolev/checkpoints"))
+    for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
+        test_ensemble(Path(f"output/fastprop_sobolev_{training_count}/checkpoints"))
+        test_ensemble(Path(f"output/fastprop_{training_count}/checkpoints"))
