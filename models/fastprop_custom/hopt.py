@@ -16,31 +16,14 @@ from train import SOLUTE_COLUMNS, SOLVENT_COLUMNS, train_ensemble
 logger = init_logger(__name__)
 ray.init(_temp_dir='/state/partition1/user/jburns', num_cpus=40, num_gpus=2)
 
-NUM_HOPT_TRIALS = 1024
+NUM_HOPT_TRIALS = 128
 
 
 def define_by_run_func(trial):
     trial.suggest_categorical("input_activation", ("sigmoid", "tanh", "clamp3"))
-    trial.suggest_categorical("activation_fxn", ("relu", "leakyrelu"))
-    trial.suggest_int("interaction_hidden_size", 400, 3_400, 200)
-    trial.suggest_int("num_interaction_layers", 0, 6, 1)
-    interaction = trial.suggest_categorical("interaction_operation", ("concatenation",))  # , "multiplication", "subtraction", "addition"))
-    # if either solute OR solvent has hidden layers (but NOT both), can only do concatenation
-    if interaction == "concatenation":
-        trial.suggest_int("num_solute_layers", 0, 0)  # 6, 1)
-        trial.suggest_int("solute_hidden_size", 200, 3_000, 200)
-        trial.suggest_int("num_solvent_layers", 0, 0)  # 6, 1)
-        trial.suggest_int("solvent_hidden_size", 200, 3_000, 200)
-    else:
-        solute_layers = trial.suggest_int("num_solute_layers", 0, 6, 1)
-        if solute_layers == 0:
-            trial.suggest_int("num_solvent_layers", 0, 0)
-            trial.suggest_int("solute_hidden_size", 0, 0)
-            trial.suggest_int("solvent_hidden_size", 0, 0)
-        else:
-            trial.suggest_int("num_solvent_layers", 1, 6, 1)
-            matched_hidden_size = trial.suggest_int("solute_hidden_size", 200, 3_000, 200)
-            trial.suggest_int("solvent_hidden_size", matched_hidden_size, matched_hidden_size)
+    trial.suggest_categorical("activation_fxn", ("relu", "leakyrelu", "sigmoid", "tanh"))
+    trial.suggest_int("hidden_size", 400, 3_400, 200)
+    trial.suggest_int("num_layers", 0, 6, 1)
 
 
 def main():
@@ -105,7 +88,7 @@ def _hopt_objective(
     solute_features = ray.get(solute_features_ref)
     solvent_features = ray.get(solvent_features_ref)
     metadata_df = ray.get(metadata_df_ref)
-    validation_results_df, _ = train_ensemble(
+    validation_results_df = train_ensemble(
         data=(solute_features, solvent_features, temperatures, solubilities, metadata_df),
         remove_output=True,
         num_features=1_613,

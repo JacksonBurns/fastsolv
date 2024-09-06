@@ -17,7 +17,7 @@ import pandas as pd
 from thermo.chemical import Chemical
 from fastprop.defaults import ALL_2D
 
-from utils import get_descs, DESCRIPTOR_COLUMNS
+from utils import get_descs, DESCRIPTOR_COLUMNS, drop_overlap
 
 
 bigsol_data: pd.DataFrame = pd.read_csv("BigSolDB.csv")
@@ -75,8 +75,9 @@ bigsol_data = bigsol_data.reset_index()
 sources = bigsol_data["source"].to_list()
 
 fastprop_data = get_descs(bigsol_data)
-
 fastprop_data.insert(1, "source", sources)
+fastprop_data = drop_overlap(fastprop_data, "vermeire")
+
 _dest = Path("krasnov")
 if not Path.exists(_dest):
     Path.mkdir(_dest)

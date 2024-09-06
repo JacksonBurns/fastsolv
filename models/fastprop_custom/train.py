@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from astartes import train_val_test_split
+from astartes import train_test_split
 from fastprop.data import fastpropDataLoader, standard_scale
 from fastprop.defaults import ALL_2D, _init_loggers, init_logger
 from fastprop.metrics import (
@@ -98,7 +98,7 @@ def train_ensemble(*, data=None, remove_output=False, training_percent=None, **m
 
     logger.info(f"Run 'tensorboard --logdir {_output_dir}/tensorboard_logs' to track training progress.")
     random_seed = RANDOM_SEED
-    all_test_results, all_validation_results = [], []
+    all_validation_results = []
     for replicate_number in range(NUM_REPLICATES):
         logger.info(f"Training model {replicate_number+1} of {NUM_REPLICATES} ({random_seed=})")
         # keep backups so repeat trials don't rescale already scaled data
@@ -125,42 +125,35 @@ def train_ensemble(*, data=None, remove_output=False, training_percent=None, **m
 
         # split the data s.t. model only sees a subset of the studies used to aggregate the training data
         if SPLIT_TYPE == "source":
-            studies_train, studies_val, studies_test = train_val_test_split(pd.unique(metadata_df["source"]), random_state=random_seed)
+            studies_train, studies_val = train_test_split(pd.unique(metadata_df["source"]), random_state=random_seed, train_size=0.95, test_size=0.05)
             train_indexes = metadata_df.index[metadata_df["source"].isin(studies_train)].tolist()
             val_indexes = metadata_df.index[metadata_df["source"].isin(studies_val)].tolist()
-            test_indexes = metadata_df.index[metadata_df["source"].isin(studies_test)].tolist()
         elif SPLIT_TYPE == "solute":
-            solutes_train, solutes_val, solutes_test = train_val_test_split(pd.unique(metadata_df["solute_smiles"]), random_state=random_seed)
+            solutes_train, solutes_val = train_test_split(pd.unique(metadata_df["solute_smiles"]), random_state=random_seed)
             train_indexes = metadata_df.index[metadata_df["solute_smiles"].isin(solutes_train)].tolist()
             val_indexes = metadata_df.index[metadata_df["solute_smiles"].isin(solutes_val)].tolist()
-            test_indexes = metadata_df.index[metadata_df["solute_smiles"].isin(solutes_test)].tolist()
         else:
-            train_indexes, val_indexes, test_indexes = train_val_test_split(np.arange(len(metadata_df)), random_state=random_seed)
+            train_indexes, val_indexes = train_test_split(np.arange(len(metadata_df)), random_state=random_seed)
         _total = len(metadata_df)
         logger.info(
-            f"train: {len(train_indexes)} ({len(train_indexes)/_total:.0%}) validation:"
-            f"{len(val_indexes)} ({len(val_indexes)/_total:.0%}) test: {len(test_indexes)} ({len(test_indexes)/_total:.0%})"
+            f"train: {len(train_indexes)} ({len(train_indexes)/_total:.0%}) validation:" f"{len(val_indexes)} ({len(val_indexes)/_total:.0%})"
         )
         # scaling
         solute_features[train_indexes], solute_feature_means, solute_feature_vars = standard_scale(solute_features[train_indexes])
         solute_scaler = partial(standard_scale, means=solute_feature_means, variances=solute_feature_vars)
         solute_features[val_indexes] = solute_scaler(solute_features[val_indexes])
-        solute_features[test_indexes] = solute_scaler(solute_features[test_indexes])
 
         solvent_features[train_indexes], solvent_feature_means, solvent_feature_vars = standard_scale(solvent_features[train_indexes])
         solvent_scaler = partial(standard_scale, means=solvent_feature_means, variances=solute_feature_vars)
         solvent_features[val_indexes] = solvent_scaler(solvent_features[val_indexes])
-        solvent_features[test_indexes] = solvent_scaler(solvent_features[test_indexes])
 
         temperatures[train_indexes], temperature_means, temperature_vars = standard_scale(temperatures[train_indexes])
         temperature_scaler = partial(standard_scale, means=temperature_means, variances=temperature_vars)
         temperatures[val_indexes] = temperature_scaler(temperatures[val_indexes])
-        temperatures[test_indexes] = temperature_scaler(temperatures[test_indexes])
 
         solubilities[train_indexes], solubility_means, solubility_vars = standard_scale(solubilities[train_indexes])
         target_scaler = partial(standard_scale, means=solubility_means, variances=solubility_vars)
         solubilities[val_indexes] = target_scaler(solubilities[val_indexes])
-        solubilities[test_indexes] = target_scaler(solubilities[test_indexes])
 
         # calculate the expected gradients post-scaling
         # start by inserting the rescaled data back into the metatdata dataframe _in the right order_
@@ -212,16 +205,7 @@ def train_ensemble(*, data=None, remove_output=False, training_percent=None, **m
             ),
             batch_size=4096,
         )
-        test_dataloader = fastpropDataLoader(
-            SolubilityDataset(
-                solute_features[test_indexes],
-                solvent_features[test_indexes],
-                temperatures[test_indexes],
-                solubilities[test_indexes],
-                tgrads[test_indexes],
-            ),
-            batch_size=4096,
-        )
+        test_dataloader = fastpropDataLoader(SolubilityDataset([], [], [], [], []))
 
         # initialize the model and train/test
         model = fastpropSolubility(
@@ -247,7 +231,6 @@ def train_ensemble(*, data=None, remove_output=False, training_percent=None, **m
             quiet=remove_output,
             inference_mode=False,
         )
-        all_test_results.append(test_results[0])
         all_validation_results.append(validation_results[0])
 
         random_seed += 1
@@ -256,11 +239,9 @@ def train_ensemble(*, data=None, remove_output=False, training_percent=None, **m
 
     validation_results_df = pd.DataFrame.from_records(all_validation_results)
     logger.info("Displaying validation results:\n%s", validation_results_df.describe().transpose().to_string())
-    test_results_df = pd.DataFrame.from_records(all_test_results)
-    logger.info("Displaying testing results:\n%s", test_results_df.describe().transpose().to_string())
     if remove_output:
         shutil.rmtree(_output_dir)
-    return validation_results_df, test_results_df
+    return validation_results_df
 
 
 if __name__ == "__main__":
@@ -277,45 +258,14 @@ if __name__ == "__main__":
     #     "solute_hidden_size": 0,
     #     "solvent_hidden_size": 0,
     # }
-    # optimized fastprop-physics model
-    # run with: DISABLE_CUSTOM_LOSS=1
-    # hopt_params = {
-    #     "input_activation": "tanh",
-    #     "activation_fxn": "leakyrelu",
-    #     "interaction_hidden_size": 1200,
-    #     "num_interaction_layers": 2,
-    #     "interaction_operation": "multiplication",
-    #     "num_solute_layers": 3,
-    #     "num_solvent_layers": 3,
-    #     "solute_hidden_size": 800,
-    #     "solvent_hidden_size": 800,
-    # }
     # optimized fastprop-sobolev model
     # run with: DISABLE_CUSTOM_LOSS=0
-    # hopt_params = {
-    #     "input_activation": "clamp3",
-    #     "activation_fxn": "leakyrelu",
-    #     "interaction_hidden_size": 1000,
-    #     "num_interaction_layers": 4,
-    #     "interaction_operation": "concatenation",
-    #     "num_solute_layers": 0,
-    #     "num_solvent_layers": 0,
-    #     "solute_hidden_size": 0,
-    #     "solvent_hidden_size": 0,
-    # }
-    # optimized fastprop-sobolev-physics model
-    # run with: DISABLE_CUSTOM_LOSS=0
-    # hopt_params = {
-    #     "input_activation": "clamp3",
-    #     "activation_fxn": "leakyrelu",
-    #     "interaction_hidden_size": 1000,
-    #     "num_interaction_layers": 1,
-    #     "interaction_operation": "multiplication",
-    #     "num_solute_layers": 1,
-    #     "num_solvent_layers": 2,
-    #     "solute_hidden_size": 1000,
-    #     "solvent_hidden_size": 1000,
-    # }
+    hopt_params = {
+        "input_activation": "clamp3",
+        "activation_fxn": "leakyrelu",
+        "hidden_size": 1000,
+        "num_layers": 4,
+    }
     train_ensemble(
         remove_output=False,
         num_features=1613,

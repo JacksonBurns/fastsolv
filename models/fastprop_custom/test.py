@@ -36,7 +36,7 @@ def parity_plot(truth, prediction, title, out_fpath, stat_str):
     plt.title(title)
     plt.savefig(out_fpath)
     print("wrote plot to", out_fpath)
-    plt.show()
+    # plt.show()
 
 
 def test_ensemble(checkpoint_dir: Path):
@@ -103,7 +103,10 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
-    # test_ensemble(Path(f"final_absolute_performance_results/fastprop_sobolev/checkpoints"))
+    # test_ensemble(Path("final_absolute_performance_results/fastprop/checkpoints"))
+    # test_ensemble(Path("final_absolute_performance_results/fastprop_physics/checkpoints"))
+    # test_ensemble(Path("final_absolute_performance_results/fastprop_sobolev/checkpoints"))
+    # test_ensemble(Path("final_absolute_performance_results/fastprop_sobolev_physics/checkpoints"))
     for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
-        test_ensemble(Path(f"output/fastprop_sobolev_{training_count}/checkpoints"))
-        test_ensemble(Path(f"output/fastprop_{training_count}/checkpoints"))
+        test_ensemble(Path(f"aleatoric_error_study/fastprop_sobolev_{training_count}/checkpoints"))
+        test_ensemble(Path(f"aleatoric_error_study/fastprop_{training_count}/checkpoints"))
