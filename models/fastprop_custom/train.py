@@ -125,7 +125,7 @@ def train_ensemble(*, data=None, remove_output=False, training_percent=None, **m
 
         # split the data s.t. model only sees a subset of the studies used to aggregate the training data
         if SPLIT_TYPE == "source":
-            studies_train, studies_val = train_test_split(pd.unique(metadata_df["source"]), random_state=random_seed, train_size=0.95, test_size=0.05)
+            studies_train, studies_val = train_test_split(pd.unique(metadata_df["source"]), random_state=random_seed, train_size=0.90, test_size=0.10)
             train_indexes = metadata_df.index[metadata_df["source"].isin(studies_train)].tolist()
             val_indexes = metadata_df.index[metadata_df["source"].isin(studies_val)].tolist()
         elif SPLIT_TYPE == "solute":
@@ -191,7 +191,7 @@ def train_ensemble(*, data=None, remove_output=False, training_percent=None, **m
                 solubilities[train_indexes],
                 tgrads[train_indexes],
             ),
-            batch_size=128,
+            batch_size=256,
             shuffle=True,
             drop_last=bool(int(os.environ.get("ENABLE_REGULARIZATION", 0))),
         )
@@ -250,25 +250,20 @@ if __name__ == "__main__":
     # hopt_params = {
     #     "input_activation": "sigmoid",
     #     "activation_fxn": "leakyrelu",
-    #     "interaction_hidden_size": 800,
-    #     "num_interaction_layers": 4,
-    #     "interaction_operation": "concatenation",
-    #     "num_solute_layers": 0,
-    #     "num_solvent_layers": 0,
-    #     "solute_hidden_size": 0,
-    #     "solvent_hidden_size": 0,
+    #     "hidden_size": 1400,
+    #     "num_layers": 3,
     # }
     # optimized fastprop-sobolev model
     # run with: DISABLE_CUSTOM_LOSS=0
     hopt_params = {
         "input_activation": "clamp3",
         "activation_fxn": "leakyrelu",
-        "hidden_size": 1000,
+        "hidden_size": 2000,
         "num_layers": 4,
     }
     train_ensemble(
         remove_output=False,
         num_features=1613,
-        learning_rate=0.001,
+        learning_rate=0.0001,
         **hopt_params,
     )

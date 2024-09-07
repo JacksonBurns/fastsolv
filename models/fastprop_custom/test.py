@@ -36,7 +36,7 @@ def parity_plot(truth, prediction, title, out_fpath, stat_str):
     plt.title(title)
     plt.savefig(out_fpath)
     print("wrote plot to", out_fpath)
-    # plt.show()
+    plt.show()
 
 
 def test_ensemble(checkpoint_dir: Path):
@@ -46,6 +46,7 @@ def test_ensemble(checkpoint_dir: Path):
     for checkpoint in os.listdir(checkpoint_dir):
         model = fastpropSolubility.load_from_checkpoint(checkpoint_dir / checkpoint)
         all_models.append(model)
+    rmses = []
     for holdout_fpath in (
         Path("boobier/leeds_acetone.csv"),
         Path("boobier/leeds_benzene.csv"),
@@ -100,13 +101,28 @@ def test_ensemble(checkpoint_dir: Path):
             f" - Pearson's r: {r:.4f}\n - MAE: {mae:.4f}\n - MSE: {mse:.4f}\n - RMSE: {rmse:.4f}\n - W/n 0.7: {wn_07:.4f}\n - W/n 1.0: {wn_1:.4f}"
         )
         parity_plot(out["logS_true"], out["logS_pred"], holdout_fpath.stem, _output_dir / f"{holdout_fpath.stem}_parity.png", stat_str)
+        rmses.append(rmse)
+    return rmses
 
 
 if __name__ == "__main__":
-    # test_ensemble(Path("final_absolute_performance_results/fastprop/checkpoints"))
-    # test_ensemble(Path("final_absolute_performance_results/fastprop_physics/checkpoints"))
-    # test_ensemble(Path("final_absolute_performance_results/fastprop_sobolev/checkpoints"))
-    # test_ensemble(Path("final_absolute_performance_results/fastprop_sobolev_physics/checkpoints"))
-    for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
-        test_ensemble(Path(f"aleatoric_error_study/fastprop_sobolev_{training_count}/checkpoints"))
-        test_ensemble(Path(f"aleatoric_error_study/fastprop_{training_count}/checkpoints"))
+    # single runs
+    test_ensemble(Path("output/test_5/checkpoints"))
+    # test_ensemble(Path("absolute_performance/fastprop/checkpoints"))
+    # test_ensemble(Path("absolute_performance/fastprop_sobolev/checkpoints"))
+    # aleatoric error study
+    # sobolev_leeds_results = []
+    # nonsobolev_leeds_results = []
+    # sobolev_solprop_results = []
+    # nonsobolev_solprop_results = []
+    # for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
+    #     leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"aleatoric_error_study/fastprop_sobolev_{training_count}/checkpoints"))
+    #     sobolev_leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
+    #     sobolev_solprop_results.append(solprop)
+    #     leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"aleatoric_error_study/fastprop_{training_count}/checkpoints"))
+    #     nonsobolev_leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
+    #     nonsobolev_solprop_results.append(solprop)
+    # print(f"{sobolev_solprop_results=}")
+    # print(f"{nonsobolev_solprop_results=}")
+    # print(f"{sobolev_leeds_results=}")
+    # print(f"{nonsobolev_leeds_results=}")

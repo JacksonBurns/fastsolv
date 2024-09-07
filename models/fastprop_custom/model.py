@@ -36,22 +36,21 @@ def _build_mlp(input_size, hidden_size, act_fun, num_layers):
     modules = []
     for i in range(num_layers):
         modules.append(torch.nn.Linear(input_size if i == 0 else hidden_size, hidden_size))
-        if (num_layers == 1) or (i < num_layers - 1):  # no activation after last layer, unless perceptron
-            if act_fun == "sigmoid":
-                modules.append(torch.nn.Sigmoid())
-            elif act_fun == "tanh":
-                modules.append(torch.nn.Tanh())
-            elif act_fun == "relu":
-                modules.append(torch.nn.ReLU())
-            elif act_fun == "relu6":
-                modules.append(torch.nn.ReLU6())
-            elif act_fun == "leakyrelu":
-                modules.append(torch.nn.LeakyReLU())
-            else:
-                raise TypeError(f"What is {act_fun}?")
-            if int(os.environ.get("ENABLE_REGULARIZATION", 0)):
-                modules.append(torch.nn.BatchNorm1d(hidden_size))
-                modules.append(torch.nn.Dropout())
+        if act_fun == "sigmoid":
+            modules.append(torch.nn.Sigmoid())
+        elif act_fun == "tanh":
+            modules.append(torch.nn.Tanh())
+        elif act_fun == "relu":
+            modules.append(torch.nn.ReLU())
+        elif act_fun == "relu6":
+            modules.append(torch.nn.ReLU6())
+        elif act_fun == "leakyrelu":
+            modules.append(torch.nn.LeakyReLU())
+        else:
+            raise TypeError(f"What is {act_fun}?")
+        if int(os.environ.get("ENABLE_REGULARIZATION", 0)):
+            modules.append(torch.nn.BatchNorm1d(hidden_size))
+            modules.append(torch.nn.Dropout())
     return modules
 
 
@@ -98,23 +97,15 @@ class fastpropSolubility(_fastprop):
         self.register_buffer("temperature_means", temperature_means)
         self.register_buffer("temperature_vars", temperature_vars)
 
-        fnn_modules = [Concatenation()]
+        fnn_modules = [Concatenation(), ClampN(n=3.0)]
         _input_size = num_features * 2 + 1
         fnn_modules += _build_mlp(_input_size, hidden_size=hidden_size, act_fun=activation_fxn, num_layers=num_layers)
         fnn_modules.append(torch.nn.Linear(hidden_size if num_layers else _input_size, 1))
-
-        self.clamp = ClampN(n=3.0)
         self.fnn = torch.nn.Sequential(*fnn_modules)
         self.save_hyperparameters()
 
     def forward(self, batch):
-        solute_features, solvent_features, temperature = batch
-        return self.fnn((
-            self.clamp(solute_features),
-            self.clamp(solvent_features),
-            temperature,
-        )
-        )
+        return self.fnn(batch)
 
     def predict_step(self, batch):
         err_msg = ""
@@ -165,7 +156,7 @@ class fastpropSolubility(_fastprop):
             grad_outputs=torch.ones_like(y_hat),
             retain_graph=True,
         )
-        _scale_factor = 100.0
+        _scale_factor = 10.0
         y_grad_loss = _scale_factor * (y_grad_hat - y_grad).pow(2).nanmean()  # MSE ignoring nan
         loss = y_loss + y_grad_loss
         self.log(f"{name}_{self.training_metric}_scaled_loss", loss)
