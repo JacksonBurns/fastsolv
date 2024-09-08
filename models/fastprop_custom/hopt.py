@@ -24,6 +24,10 @@ def define_by_run_func(trial):
     trial.suggest_categorical("activation_fxn", ("relu", "leakyrelu", "sigmoid", "tanh"))
     trial.suggest_int("hidden_size", 400, 3_400, 200)
     trial.suggest_int("num_layers", 0, 6, 1)
+    trial.suggest_int("solvent_hidden_size", 400, 3_400, 200)
+    trial.suggest_int("solvent_layers", 0, 6, 1)
+    trial.suggest_int("solute_hidden_size", 400, 3_400, 200)
+    trial.suggest_int("solute_layers", 0, 6, 1)
 
 
 def main():
@@ -92,7 +96,7 @@ def _hopt_objective(
         data=(solute_features, solvent_features, temperatures, solubilities, metadata_df),
         remove_output=True,
         num_features=1_613,
-        learning_rate=0.001,
+        learning_rate=0.0001,
         **trial,
     )
     return {"mse": validation_results_df.describe().at["mean", "validation_mse_scaled_loss"]}

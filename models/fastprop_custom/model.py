@@ -60,7 +60,7 @@ class fastpropSolubility(_fastprop):
         num_layers: 2,
         hidden_size: 1_800,
         activation_fxn: Literal["relu", "leakyrelu"] = "relu",
-        input_activation: Literal["sigmoid", "tanh", "clamp3"] = "sigmoid",
+        input_activation: Literal["sigmoid", "clamp3"] = "sigmoid",
         num_features: int = 1613,
         learning_rate: float = 0.0001,
         target_means: torch.Tensor = None,
@@ -97,7 +97,7 @@ class fastpropSolubility(_fastprop):
         self.register_buffer("temperature_means", temperature_means)
         self.register_buffer("temperature_vars", temperature_vars)
 
-        fnn_modules = [Concatenation(), ClampN(n=3.0)]
+        fnn_modules = [Concatenation(), ClampN(n=3.0) if input_activation == "clamp3" else torch.nn.Sigmoid()]
         _input_size = num_features * 2 + 1
         fnn_modules += _build_mlp(_input_size, hidden_size=hidden_size, act_fun=activation_fxn, num_layers=num_layers)
         fnn_modules.append(torch.nn.Linear(hidden_size if num_layers else _input_size, 1))
@@ -189,6 +189,72 @@ class fastpropSolubility(_fastprop):
         loss, y_hat = self._loss(batch, "test")
         self._human_loss(y_hat, batch, "test")
         return loss
+
+
+class GradPropPhys(fastpropSolubility):
+    def __init__(
+        self,
+        solvent_layers: 2,
+        solvent_hidden_size: 1_800,
+        solute_layers: 2,
+        solute_hidden_size: 1_800,
+        num_layers: 2,
+        hidden_size: 1_800,
+        activation_fxn: Literal["relu", "leakyrelu"] = "relu",
+        input_activation: Literal["sigmoid", "clamp3"] = "sigmoid",
+        num_features: int = 1613,
+        learning_rate: float = 0.0001,
+        target_means: torch.Tensor = None,
+        target_vars: torch.Tensor = None,
+        solute_means: torch.Tensor = None,
+        solute_vars: torch.Tensor = None,
+        solvent_means: torch.Tensor = None,
+        solvent_vars: torch.Tensor = None,
+        temperature_means: torch.Tensor = None,
+        temperature_vars: torch.Tensor = None,
+    ):
+        super().__init__(
+            num_layers=2,
+            hidden_size=hidden_size,
+            activation_fxn=activation_fxn,
+            input_activation=input_activation,
+            num_features=num_features,
+            learning_rate=learning_rate,
+            target_means=target_means,
+            target_vars=target_vars,
+            solute_means=solute_means,
+            solute_vars=solute_vars,
+            solvent_means=solvent_means,
+            solvent_vars=solvent_vars,
+            temperature_means=temperature_means,
+            temperature_vars=temperature_vars,
+        )
+
+        fnn_modules = [Concatenation(), ClampN(n=3.0) if input_activation == "clamp3" else torch.nn.Sigmoid()]
+        _input_size = num_features + 1
+        fnn_modules += _build_mlp(_input_size, hidden_size=solute_hidden_size, act_fun=activation_fxn, num_layers=solute_layers)
+        _solute_out_size = solute_hidden_size if solute_layers else _input_size
+        self.solute_fnn = torch.nn.Sequential(*fnn_modules)
+
+        fnn_modules = [Concatenation(), ClampN(n=3.0) if input_activation == "clamp3" else torch.nn.Sigmoid()]
+        _input_size = num_features + 1
+        fnn_modules += _build_mlp(_input_size, hidden_size=solvent_hidden_size, act_fun=activation_fxn, num_layers=solvent_layers)
+        _solvent_out_size = solvent_hidden_size if solvent_layers else _input_size
+        self.solvent_fnn = torch.nn.Sequential(*fnn_modules)
+
+        fnn_modules = [Concatenation(), ClampN(n=3.0) if input_activation == "clamp3" else torch.nn.Sigmoid()]
+        _input_size = _solute_out_size + _solvent_out_size + 1
+        fnn_modules += _build_mlp(_input_size, hidden_size=hidden_size, act_fun=activation_fxn, num_layers=num_layers)
+        fnn_modules.append(torch.nn.Linear(hidden_size if num_layers else _input_size, 1))
+        self.fnn = torch.nn.Sequential(*fnn_modules)
+
+        self.save_hyperparameters()
+
+    def forward(self, batch):
+        solute_features, solvent_features, temperature, = batch
+        solute_representation = self.solute_fnn((solute_features, temperature))
+        solvent_representation = self.solvent_fnn((solvent_features, temperature))
+        return self.fnn((solute_representation, solvent_representation, temperature))
 
 
 if __name__ == "__main__":

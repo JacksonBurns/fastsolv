@@ -23,7 +23,7 @@ from fastprop.model import train_and_test
 from lightning.pytorch import seed_everything
 
 from data import SolubilityDataset
-from model import fastpropSolubility
+from model import fastpropSolubility, GradPropPhys
 
 logger = init_logger(__name__)
 
@@ -208,7 +208,7 @@ def train_ensemble(*, data=None, remove_output=False, training_percent=None, **m
         test_dataloader = fastpropDataLoader(SolubilityDataset([], [], [], [], []))
 
         # initialize the model and train/test
-        model = fastpropSolubility(
+        model = GradPropPhys(
             **model_kwargs,
             target_means=solubility_means,
             target_vars=solubility_vars,
@@ -247,20 +247,24 @@ def train_ensemble(*, data=None, remove_output=False, training_percent=None, **m
 if __name__ == "__main__":
     # optimized fastprop model
     # run with: DISABLE_CUSTOM_LOSS=1
-    # hopt_params = {
-    #     "input_activation": "sigmoid",
-    #     "activation_fxn": "leakyrelu",
-    #     "hidden_size": 1400,
-    #     "num_layers": 3,
-    # }
+    hopt_params = {
+        "input_activation": "tanh",
+        "activation_fxn": "relu",
+        "hidden_size": 3000,
+        "num_layers": 4,
+        "solvent_hidden_size": 1000,
+        "solvent_layers": 2,
+        "solute_hidden_size": 1200,
+        "solute_layers": 3,
+    }
     # optimized fastprop-sobolev model
     # run with: DISABLE_CUSTOM_LOSS=0
-    hopt_params = {
-        "input_activation": "clamp3",
-        "activation_fxn": "leakyrelu",
-        "hidden_size": 2000,
-        "num_layers": 4,
-    }
+    # hopt_params = {
+    #     "input_activation": "clamp3",
+    #     "activation_fxn": "leakyrelu",
+    #     "hidden_size": 3000,
+    #     "num_layers": 2,
+    # }
     train_ensemble(
         remove_output=False,
         num_features=1613,

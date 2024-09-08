@@ -36,7 +36,7 @@ def parity_plot(truth, prediction, title, out_fpath, stat_str):
     plt.title(title)
     plt.savefig(out_fpath)
     print("wrote plot to", out_fpath)
-    plt.show()
+    # plt.show()
 
 
 def test_ensemble(checkpoint_dir: Path):
@@ -107,22 +107,21 @@ def test_ensemble(checkpoint_dir: Path):
 
 if __name__ == "__main__":
     # single runs
-    test_ensemble(Path("output/test_5/checkpoints"))
-    # test_ensemble(Path("absolute_performance/fastprop/checkpoints"))
-    # test_ensemble(Path("absolute_performance/fastprop_sobolev/checkpoints"))
+    # test_ensemble(Path("output/gradprop/checkpoints"))
+    # test_ensemble(Path("output/fastprop/checkpoints"))
     # aleatoric error study
-    # sobolev_leeds_results = []
-    # nonsobolev_leeds_results = []
-    # sobolev_solprop_results = []
-    # nonsobolev_solprop_results = []
-    # for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
-    #     leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"aleatoric_error_study/fastprop_sobolev_{training_count}/checkpoints"))
-    #     sobolev_leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
-    #     sobolev_solprop_results.append(solprop)
-    #     leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"aleatoric_error_study/fastprop_{training_count}/checkpoints"))
-    #     nonsobolev_leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
-    #     nonsobolev_solprop_results.append(solprop)
-    # print(f"{sobolev_solprop_results=}")
-    # print(f"{nonsobolev_solprop_results=}")
-    # print(f"{sobolev_leeds_results=}")
-    # print(f"{nonsobolev_leeds_results=}")
+    sobolev_leeds_results = []
+    nonsobolev_leeds_results = []
+    sobolev_solprop_results = []
+    nonsobolev_solprop_results = []
+    for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
+        leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"output/fastprop_sobolev_{training_count}/checkpoints"))
+        sobolev_leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
+        sobolev_solprop_results.append(solprop)
+        leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"output/fastprop_{training_count}/checkpoints"))
+        nonsobolev_leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
+        nonsobolev_solprop_results.append(solprop)
+    print(f"{sobolev_solprop_results=}")
+    print(f"{nonsobolev_solprop_results=}")
+    print(f"{sobolev_leeds_results=}")
+    print(f"{nonsobolev_leeds_results=}")

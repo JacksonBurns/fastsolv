@@ -5,26 +5,16 @@ from train import train_ensemble
 training_counts = (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215)
 
 fastprop_config = {
-    "input_activation": "sigmoid",
-    "activation_fxn": "leakyrelu",
-    "interaction_hidden_size": 800,
-    "num_interaction_layers": 4,
-    "interaction_operation": "concatenation",
-    "num_solute_layers": 0,
-    "num_solvent_layers": 0,
-    "solute_hidden_size": 0,
-    "solvent_hidden_size": 0,
+    "input_activation": "tanh",
+    "activation_fxn": "relu",
+    "hidden_size": 3000,
+    "num_layers": 4,
 }
 fastprop_sobolev_config = {
     "input_activation": "clamp3",
     "activation_fxn": "leakyrelu",
-    "interaction_hidden_size": 1000,
-    "num_interaction_layers": 4,
-    "interaction_operation": "concatenation",
-    "num_solute_layers": 0,
-    "num_solvent_layers": 0,
-    "solute_hidden_size": 0,
-    "solvent_hidden_size": 0,
+    "hidden_size": 3000,
+    "num_layers": 2,
 }
 
 
