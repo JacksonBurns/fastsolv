@@ -13,6 +13,8 @@ from chemprop import data as chemprop_data_utils
 from chemprop import featurizers
 from chemprop.models import load_model
 
+from train import CustomMSEMetric  # needed to load model (or do we just need to call the registry?)
+
 
 def parity_plot(truth, prediction, title, out_fpath, stat_str):
     plt.clf()
@@ -96,10 +98,12 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
+    # test_ensemble(Path("output/test/checkpoints"))
+    # exit(0)
     leeds_results = []
     solprop_results = []
     for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
-        leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"output/chemprop_{training_count}/checkpoints"))
+        leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"chemprop_sobolev_v2/chemprop_{training_count}/checkpoints"))
         leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
         solprop_results.append(solprop)
     print(f"{leeds_results=}")

@@ -5,12 +5,14 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import torch
 from astartes import train_test_split
 from lightning import pytorch as pl
 from lightning.pytorch import seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.loggers import TensorBoardLogger
+from sklearn.preprocessing import StandardScaler
 
 from chemprop import data as chemprop_data_utils
 from chemprop import featurizers, nn
@@ -20,6 +22,45 @@ from chemprop.nn import metrics
 NUM_REPLICATES = 4
 RANDOM_SEED = 1701  # the final frontier
 TRAINING_FPATH = Path("krasnov/bigsoldb_chemprop.csv")
+
+
+class CustomMSEMetric(metrics.MSEMetric):
+    def forward(self, preds, targets, mask, weights, lt_mask, gt_mask):
+        return torch.nn.functional.mse_loss(preds, targets[:, 0, None], reduction="mean")
+
+
+class SobolevMulticomponentMPNN(multi.MulticomponentMPNN):
+    def training_step(self, batch, batch_idx):
+        bmg, V_d, X_d, targets, *_ = batch
+        # track grad for temperature
+        X_d.requires_grad_()
+
+        Z = self.fingerprint(bmg, V_d, X_d)
+        y_hat = self.predictor.train_step(Z)
+        y_loss = torch.nn.functional.mse_loss(y_hat, targets[:, 0, None], reduction="mean")
+        (y_grad_hat,) = torch.autograd.grad(
+            y_hat,
+            X_d,
+            grad_outputs=torch.ones_like(y_hat),
+            retain_graph=True,
+        )
+        _scale_factor = 1.0
+        y_grad_loss = _scale_factor * (y_grad_hat - targets[:, 1]).pow(2).nanmean()  # MSE ignoring nan
+        loss = y_loss  # + y_grad_loss
+        self.log("train/sobolev_loss", loss)
+        self.log("train/logs_loss", y_loss)
+        self.log("train/grad_loss", y_grad_loss)
+
+        self.log("train_loss", loss, prog_bar=True)
+
+        return loss
+
+
+def _f(r):
+    if len(r["scaled_logS"]) == 1:
+        return [np.nan]
+    # mask out enormous (non-physical) values and nan/inf
+    return [i if (np.isfinite(i) and np.abs(i) < 1.0) else np.nan for i in np.gradient(r["scaled_logS"], r["scaled_temperature"])]
 
 
 def train_ensemble(*, training_percent=None, **model_kwargs):
@@ -48,18 +89,49 @@ def train_ensemble(*, training_percent=None, **model_kwargs):
             df = df.iloc[chosen_indexes]
             df.reset_index(inplace=True, drop=True)
 
-        all_data = [
-            [
-                chemprop_data_utils.MoleculeDatapoint.from_smi(smi, [log_s], x_d=np.array([temperature]))
-                for smi, log_s, temperature in zip(df["solute_smiles"], df["logS"], df["temperature"])
-            ],
-            list(map(chemprop_data_utils.MoleculeDatapoint.from_smi, df["solvent_smiles"])),
-        ]
-
         # split the data s.t. model only sees a subset of the studies used to aggregate the training data
         studies_train, studies_val = train_test_split(pd.unique(df["source"]), random_state=random_seed, train_size=0.90, test_size=0.10)
         train_indexes = df.index[df["source"].isin(studies_train)].tolist()
         val_indexes = df.index[df["source"].isin(studies_val)].tolist()
+
+        # manual re-scaling
+        target_scaler = StandardScaler().fit(df[["logS"]].iloc[train_indexes])
+        scaled_logs = target_scaler.transform(df[["logS"]]).ravel()
+        temperature_scaler = StandardScaler().fit(df[["temperature"]].iloc[train_indexes])
+        scaled_temperature = temperature_scaler.transform(df[["temperature"]]).ravel()
+
+        # calculate known temperature gradients
+        tgrads = pd.concat(
+            (
+                df,
+                pd.DataFrame(
+                    {
+                        "source_index": np.arange(len(df["temperature"])),
+                        "scaled_temperature": scaled_temperature,
+                        "scaled_logS": scaled_logs,
+                    }
+                ),
+            ),
+            axis=1,
+        )
+        # group the data by experiment
+        tgrads = tgrads.groupby(["source", "solvent_smiles", "solute_smiles"])[["scaled_logS", "scaled_temperature", "source_index"]].aggregate(list)
+        # calculate the gradient at each measurement of logS wrt temperature
+        tgrads["logSgradT"] = tgrads.apply(_f, axis=1)
+        # get them in the same order as the source data
+        tgrads = tgrads.explode(["logSgradT", "source_index"]).sort_values(by="source_index")
+        # convert and mask
+        tgrads = tgrads["logSgradT"].to_numpy(dtype=np.float32)
+        _mask = np.isnan(tgrads)
+        print(f"Masking {np.count_nonzero(_mask)} of {len(_mask)} gradients!")
+        print(f"{np.count_nonzero(tgrads > 0)} of {len(tgrads)} were positive!")
+        all_data = [
+            [
+                chemprop_data_utils.MoleculeDatapoint.from_smi(smi, [log_s, log_s_grad_T], x_d=np.array([temperature]))
+                for smi, log_s, log_s_grad_T, temperature in zip(df["solute_smiles"], scaled_logs, tgrads, df["temperature"])
+            ],
+            list(map(chemprop_data_utils.MoleculeDatapoint.from_smi, df["solvent_smiles"])),
+        ]
 
         _total = len(df)
         print(f"train: {len(train_indexes)} ({len(train_indexes)/_total:.0%}) validation:" f"{len(val_indexes)} ({len(val_indexes)/_total:.0%})")
@@ -69,39 +141,43 @@ def train_ensemble(*, training_percent=None, **model_kwargs):
         train_datasets = [chemprop_data_utils.MoleculeDataset(train_data[i], featurizer) for i in range(len(all_data))]
         val_datasets = [chemprop_data_utils.MoleculeDataset(val_data[i], featurizer) for i in range(len(all_data))]
         train_mcdset = chemprop_data_utils.MulticomponentDataset(train_datasets)
+        train_mcdset.normalize_inputs("X_d", [temperature_scaler, None])
         train_mcdset.cache = True
-        scaler = train_mcdset.normalize_targets()
-        extra_datapoint_descriptors_scaler = train_mcdset.normalize_inputs("X_d")
         val_mcdset = chemprop_data_utils.MulticomponentDataset(val_datasets)
+        # chemprop docs say to do this, but it actually gets scaled during training
+        # val_mcdset.normalize_inputs("X_d", [temperature_scaler, None])
         val_mcdset.cache = True
-        val_mcdset.normalize_targets(scaler)
-        val_mcdset.normalize_inputs("X_d", extra_datapoint_descriptors_scaler)
 
-        train_loader = chemprop_data_utils.build_dataloader(train_mcdset)
-        val_loader = chemprop_data_utils.build_dataloader(val_mcdset, shuffle=False)
+        train_loader = chemprop_data_utils.build_dataloader(train_mcdset, batch_size=256, num_workers=1, persistent_workers=True)
+        val_loader = chemprop_data_utils.build_dataloader(val_mcdset, batch_size=1_024, shuffle=False, num_workers=1, persistent_workers=True)
 
         # build Chemprop
         mcmp = nn.MulticomponentMessagePassing(
-            blocks=[nn.BondMessagePassing() for _ in range(len(all_data))],
+            blocks=[nn.BondMessagePassing(depth=3, d_h=800) for _ in range(len(all_data))],  # dropout=0.2
             n_components=len(all_data),
         )
-        agg = nn.NormAggregation()
-        output_transform = nn.UnscaleTransform.from_standard_scaler(scaler)
+        agg = nn.MeanAggregation()
+        output_transform = nn.UnscaleTransform.from_standard_scaler(target_scaler)
         ffn = nn.RegressionFFN(
             input_dim=mcmp.output_dim + 1,  # temperature
-            hidden_dim=1_400,
-            n_layers=3,
+            hidden_dim=800,
+            n_layers=2,
+            # dropout=0.5,
+            criterion=CustomMSEMetric(),
             output_transform=output_transform,
         )
-        X_d_transform = nn.ScaleTransform.from_standard_scaler(extra_datapoint_descriptors_scaler[0])
-        metric_list = [metrics.MSEMetric(), metrics.RMSEMetric(), metrics.MAEMetric(), metrics.R2Metric()]
-        mcmpnn = multi.MulticomponentMPNN(
+        X_d_transform = nn.ScaleTransform.from_standard_scaler(temperature_scaler)
+        metric_list = [CustomMSEMetric()]
+        mcmpnn = SobolevMulticomponentMPNN(
             mcmp,
             agg,
             ffn,
-            batch_norm=False,
+            batch_norm=True,
             metrics=metric_list,
             X_d_transform=X_d_transform,
+            # init_lr=0.00001,
+            # max_lr=0.00001,
+            # final_lr=0.00001,
         )
         print(mcmpnn)
         try:
@@ -164,6 +240,8 @@ def rename_recent_dir(updated_name):
 
 
 if __name__ == "__main__":
+    # train_ensemble()
+    # exit(0)
     for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
         training_percent = training_count / 5215
         train_ensemble(training_percent=training_percent)
