@@ -22,15 +22,14 @@ from fastprop.metrics import (
 from fastprop.model import train_and_test
 from lightning.pytorch import seed_everything
 
-from data import SolubilityDataset
-from model import fastpropSolubility, GradPropPhys
+from classes import SolubilityDataset, fastpropSolubility
 
 logger = init_logger(__name__)
 
 NUM_REPLICATES = 4
 SPLIT_TYPE = "source"  # solute, random
-RANDOM_SEED = 1701  # the final frontier
-TRAINING_FPATH = Path("krasnov/bigsoldb_downsample.csv")
+RANDOM_SEED = 3511  # the final frontier
+TRAINING_FPATH = Path("krasnov/bigsoldb_fastprop_nonaq.csv")
 
 SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
 SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
@@ -39,8 +38,17 @@ SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
 def _f(r):
     if len(r["logS"]) == 1:
         return [np.nan]
-    # mask out enormous (non-physical) values and nan/inf
-    return [i if (np.isfinite(i) and np.abs(i) < 1.0) else np.nan for i in np.gradient(r["logS"], r["temperature"])]
+    sorted_idxs = np.argsort(r["temperature"])
+    unsort_idxs = np.argsort(sorted_idxs)
+    # mask out enormous (non-physical) values, negative values, and nan/inf
+    grads = [
+        i if (np.isfinite(i) and np.abs(i) < 1.0 and i > 0.0) else np.nan
+        for i in np.gradient(
+            [r["logS"][i] for i in sorted_idxs],
+            [r["temperature"][i] for i in sorted_idxs],
+        )
+    ]
+    return [grads[i] for i in unsort_idxs]
 
 
 def logS_within_0_7_percentage(truth: torch.Tensor, prediction: torch.Tensor, ignored: None, multitask: bool = False):
@@ -96,8 +104,23 @@ def train_ensemble(*, data=None, remove_output=False, training_percent=None, **m
     else:
         solute_features_og, solvent_features_og, temperatures_og, solubilities_og, metadata_df_og = data
 
-    logger.info(f"Run 'tensorboard --logdir {_output_dir}/tensorboard_logs' to track training progress.")
     random_seed = RANDOM_SEED
+    if training_percent is not None:
+        logger.warning(f"Down-sampling training data to {training_percent:.2%} size!")
+        downsample_df = metadata_df_og.copy()
+        downsample_df["original_index"] = np.arange(len(metadata_df_og))
+        downsample_df = downsample_df.groupby(["solute_smiles", "solvent_smiles", "source"]).aggregate(list)
+        downsample_df = downsample_df.sample(frac=training_percent, replace=False, random_state=random_seed)
+        chosen_indexes = downsample_df.explode("original_index")["original_index"].to_numpy().flatten().astype(int)
+        logger.warning(f"Actual downsample percentage is {len(chosen_indexes)/len(metadata_df_og):.2%}, count: {len(chosen_indexes)}!")
+        metadata_df_og = metadata_df_og.iloc[chosen_indexes]
+        metadata_df_og.reset_index(inplace=True, drop=True)
+        solubilities_og = solubilities_og[chosen_indexes]
+        temperatures_og = temperatures_og[chosen_indexes]
+        solute_features_og = solute_features_og[chosen_indexes]
+        solvent_features_og = solvent_features_og[chosen_indexes]
+
+    logger.info(f"Run 'tensorboard --logdir {_output_dir}/tensorboard_logs' to track training progress.")
     all_validation_results = []
     for replicate_number in range(NUM_REPLICATES):
         logger.info(f"Training model {replicate_number+1} of {NUM_REPLICATES} ({random_seed=})")
@@ -107,21 +130,6 @@ def train_ensemble(*, data=None, remove_output=False, training_percent=None, **m
         temperatures = temperatures_og.detach().clone()
         solute_features = solute_features_og.detach().clone()
         solvent_features = solvent_features_og.detach().clone()
-
-        if training_percent is not None:
-            logger.warning(f"Down-sampling training data to {training_percent:.2%} size!")
-            downsample_df = metadata_df.copy()
-            downsample_df["original_index"] = np.arange(len(metadata_df))
-            downsample_df = downsample_df.groupby(["solute_smiles", "solvent_smiles", "source"]).aggregate(list)
-            downsample_df = downsample_df.sample(frac=training_percent, replace=False, random_state=random_seed)
-            chosen_indexes = downsample_df.explode("original_index")["original_index"].to_numpy().flatten().astype(int)
-            logger.warning(f"Actual downsample percentage is {len(chosen_indexes)/len(metadata_df):.2%}, count: {len(chosen_indexes)}!")
-            metadata_df = metadata_df.iloc[chosen_indexes]
-            metadata_df.reset_index(inplace=True, drop=True)
-            solubilities = solubilities[chosen_indexes]
-            temperatures = temperatures[chosen_indexes]
-            solute_features = solute_features[chosen_indexes]
-            solvent_features = solvent_features[chosen_indexes]
 
         # split the data s.t. model only sees a subset of the studies used to aggregate the training data
         if SPLIT_TYPE == "source":
@@ -208,7 +216,7 @@ def train_ensemble(*, data=None, remove_output=False, training_percent=None, **m
         test_dataloader = fastpropDataLoader(SolubilityDataset([], [], [], [], []))
 
         # initialize the model and train/test
-        model = GradPropPhys(
+        model = fastpropSolubility(
             **model_kwargs,
             target_means=solubility_means,
             target_vars=solubility_vars,
@@ -244,30 +252,67 @@ def train_ensemble(*, data=None, remove_output=False, training_percent=None, **m
     return validation_results_df
 
 
+# open the output directory, rename the most recent subdir with a new name
+def rename_recent_dir(updated_name):
+    parent_dir = "output"
+    subdirs = [os.path.join(parent_dir, d) for d in os.listdir(parent_dir) if os.path.isdir(os.path.join(parent_dir, d))]
+    most_recent_dir = max(subdirs, key=os.path.getmtime)
+    new_name = os.path.join(parent_dir, updated_name)
+    os.rename(most_recent_dir, new_name)
+
+
 if __name__ == "__main__":
     # optimized fastprop model
     # run with: DISABLE_CUSTOM_LOSS=1
-    hopt_params = {
-        "input_activation": "tanh",
-        "activation_fxn": "relu",
-        "hidden_size": 3000,
-        "num_layers": 4,
-        "solvent_hidden_size": 1000,
-        "solvent_layers": 2,
-        "solute_hidden_size": 1200,
-        "solute_layers": 3,
-    }
-    # optimized fastprop-sobolev model
-    # run with: DISABLE_CUSTOM_LOSS=0
+    # hopt_params = {
+    #     "input_activation": "tanh",
+    #     "activation_fxn": "relu",
+    #     "hidden_size": 3000,
+    #     "num_layers": 4,
+    #     "solvent_hidden_size": 1000,
+    #     "solvent_layers": 2,
+    #     "solute_hidden_size": 1200,
+    #     "solute_layers": 3,
+    # }
+    # optimized fastprop_phys model
+    # disable custom loss
     # hopt_params = {
     #     "input_activation": "clamp3",
-    #     "activation_fxn": "leakyrelu",
-    #     "hidden_size": 3000,
+    #     "activation_fxn": "relu",
+    #     "hidden_size": 2000,
     #     "num_layers": 2,
+    #     "solvent_hidden_size": 2400,
+    #     "solvent_layers": 4,
+    #     "solute_hidden_size": 400,
+    #     "solute_layers": 1,
     # }
-    train_ensemble(
-        remove_output=False,
-        num_features=1613,
-        learning_rate=0.0001,
-        **hopt_params,
-    )
+    # optimized gradpropphys model
+    # enable custom loss
+    # hopt_params = {
+    #     "input_activation": "clamp3",
+    #     "activation_fxn": "relu",
+    #     "hidden_size": 2000,
+    #     "num_layers": 2,
+    #     "solvent_hidden_size": 2400,
+    #     "solvent_layers": 4,
+    #     "solute_hidden_size": 400,
+    #     "solute_layers": 1,
+    # }
+    # optimized fastprop-sobolev model
+    # run with: DISABLE_CUSTOM_LOSS=0
+    hopt_params = {
+        "input_activation": "clamp3",
+        "activation_fxn": "leakyrelu",
+        "hidden_size": 3000,
+        "num_layers": 2,
+    }
+    for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
+        training_percent = training_count / 5215
+        train_ensemble(
+            training_percent=training_percent,
+            remove_output=False,
+            num_features=1613,
+            learning_rate=0.0001,
+            **hopt_params,
+        )
+        rename_recent_dir(f"fastprop_{training_count}")

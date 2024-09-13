@@ -8,6 +8,7 @@ from fastprop.descriptors import get_descriptors
 from rdkit import Chem
 
 DESCRIPTOR_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D] + ["solvent_" + d for d in ALL_2D]
+DROP_WATER = False
 
 
 def get_descs(src_df: pd.DataFrame):
@@ -45,17 +46,21 @@ def drop_overlap(src_df: pd.DataFrame, base_set: str):
     """
     if base_set == "krasnov":
         try:
-            ref_smiles = pl.read_csv(Path("krasnov/bigsoldb_downsample.csv"), columns=["solute_smiles"])["solute_smiles"].to_list()
+            ref_smiles = pl.read_csv(Path(f"krasnov/bigsoldb_chemprop{'_nonaq' if DROP_WATER else ''}.csv"), columns=["solute_smiles"])[
+                "solute_smiles"
+            ].to_list()
         except FileNotFoundError as e:
             raise RuntimeError("Unable to open BigSol - run `python krasnov.py` first.") from e
     elif base_set == "vermeire":
         try:
-            ref_smiles = pl.read_csv(Path("vermeire/solprop_nonaq.csv"), columns=["solute_smiles"])["solute_smiles"].to_list()
+            ref_smiles = pl.read_csv(Path(f"vermeire/solprop_chemprop{'_nonaq' if DROP_WATER else ''}.csv"), columns=["solute_smiles"])[
+                "solute_smiles"
+            ].to_list()
         except FileNotFoundError as e:
             raise RuntimeError("Unable to open SolProp - run `python vermeire.py` first.") from e
     src_canon_smiles = src_df["solute_smiles"].apply(lambda s: Chem.CanonSmiles(s))
     ref_canon_smiles = set(Chem.CanonSmiles(s) for s in ref_smiles)
     print(len(src_df), "<--- number of entries in the source data")
     src_df = src_df[~src_canon_smiles.isin(ref_canon_smiles)].reset_index(drop=True)
-    print(len(src_df), "<--- number of entries after dropping solutes in our training dataset")
+    print(len(src_df), f"<--- number of entries after dropping solutes in {base_set} dataset")
     return src_df

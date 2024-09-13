@@ -4,16 +4,14 @@ SolProp_v1.2*
 *highsol_training
 paper/paper.pdf
 *.pyc
-models/fastprop_custom/output*
-models/fastprop_custom/.output*
-models/fastprop_custom/transfer_optimal
-models/fastprop_custom/final_absolute_performance_results
-models/fastprop_custom/aleatoric_error_study
+models/fastprop/output
+models/chemprop/output
 fastprop_sobolev/*output*
 checkpoints/
 slurm*err
 slurm*out
 aqsol
+dev
 # WIP
 fastprop_sobolev*
 data/dortmund.py

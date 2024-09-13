@@ -44,10 +44,10 @@ def test_ensemble(checkpoint_dir: Path):
         all_models.append(model)
     rmses = []
     for holdout_fpath in (
-        Path("boobier/leeds_acetone.csv"),
-        Path("boobier/leeds_benzene.csv"),
-        Path("boobier/leeds_ethanol.csv"),
-        Path("vermeire/solprop_nonaq.csv"),
+        Path("boobier/leeds_acetone_chemprop.csv"),
+        Path("boobier/leeds_benzene_chemprop.csv"),
+        Path("boobier/leeds_ethanol_chemprop.csv"),
+        Path("vermeire/solprop_chemprop_nonaq.csv"),
     ):
         # load the holdout data
         df = pd.read_csv(Path("../../data") / holdout_fpath, index_col=0)
@@ -98,13 +98,13 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
-    # test_ensemble(Path("output/test/checkpoints"))
+    # test_ensemble(Path("output/idek/checkpoints"))
     # exit(0)
-    leeds_results = []
-    solprop_results = []
+    chemprop_sobolev_leeds_results = []
+    chemprop_sobolev_solprop_results = []
     for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
-        leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"chemprop_sobolev_v2/chemprop_{training_count}/checkpoints"))
-        leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
-        solprop_results.append(solprop)
-    print(f"{leeds_results=}")
-    print(f"{solprop_results=}")
+        leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"output/chemprop_{training_count}/checkpoints"))
+        chemprop_sobolev_leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
+        chemprop_sobolev_solprop_results.append(solprop)
+    print(f"{chemprop_sobolev_solprop_results=}")
+    print(f"{chemprop_sobolev_leeds_results=}")

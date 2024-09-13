@@ -21,7 +21,7 @@ from chemprop.nn import metrics
 
 NUM_REPLICATES = 4
 RANDOM_SEED = 1701  # the final frontier
-TRAINING_FPATH = Path("krasnov/bigsoldb_chemprop.csv")
+TRAINING_FPATH = Path("krasnov/bigsoldb_chemprop_nonaq.csv")
 
 
 class CustomMSEMetric(metrics.MSEMetric):
@@ -31,10 +31,16 @@ class CustomMSEMetric(metrics.MSEMetric):
 
 class SobolevMulticomponentMPNN(multi.MulticomponentMPNN):
     def training_step(self, batch, batch_idx):
+        return self._sobolev_loss(batch, "train")
+
+    def validation_step(self, batch, batch_idx):
+        return self._sobolev_loss(batch, "val")
+
+    @torch.enable_grad()
+    def _sobolev_loss(self, batch, name):
         bmg, V_d, X_d, targets, *_ = batch
         # track grad for temperature
         X_d.requires_grad_()
-
         Z = self.fingerprint(bmg, V_d, X_d)
         y_hat = self.predictor.train_step(Z)
         y_loss = torch.nn.functional.mse_loss(y_hat, targets[:, 0, None], reduction="mean")
@@ -46,21 +52,28 @@ class SobolevMulticomponentMPNN(multi.MulticomponentMPNN):
         )
         _scale_factor = 1.0
         y_grad_loss = _scale_factor * (y_grad_hat - targets[:, 1]).pow(2).nanmean()  # MSE ignoring nan
-        loss = y_loss  # + y_grad_loss
-        self.log("train/sobolev_loss", loss)
-        self.log("train/logs_loss", y_loss)
-        self.log("train/grad_loss", y_grad_loss)
-
-        self.log("train_loss", loss, prog_bar=True)
-
+        loss = y_loss + y_grad_loss
+        self.log(f"{name}/sobolev_loss", loss, batch_size=len(batch[0]))
+        self.log(f"{name}/logs_loss", y_loss, batch_size=len(batch[0]))
+        self.log(f"{name}/grad_loss", y_grad_loss, batch_size=len(batch[0]))
+        self.log(f"{name}_loss", loss, prog_bar=True, batch_size=len(batch[0]))
         return loss
 
 
 def _f(r):
     if len(r["scaled_logS"]) == 1:
         return [np.nan]
-    # mask out enormous (non-physical) values and nan/inf
-    return [i if (np.isfinite(i) and np.abs(i) < 1.0) else np.nan for i in np.gradient(r["scaled_logS"], r["scaled_temperature"])]
+    sorted_idxs = np.argsort(r["scaled_temperature"])
+    unsort_idxs = np.argsort(sorted_idxs)
+    # mask out enormous (non-physical) values, negative values, and nan/inf
+    grads = [
+        i if (np.isfinite(i) and np.abs(i) < 1.0 and i > 0.0) else np.nan
+        for i in np.gradient(
+            [r["scaled_logS"][i] for i in sorted_idxs],
+            [r["scaled_temperature"][i] for i in sorted_idxs],
+        )
+    ]
+    return [grads[i] for i in unsort_idxs]
 
 
 def train_ensemble(*, training_percent=None, **model_kwargs):
@@ -72,23 +85,23 @@ def train_ensemble(*, training_percent=None, **model_kwargs):
     _data_dir = Path("../../data")
 
     random_seed = RANDOM_SEED
+    # load the training data
+    src_df = pd.read_csv(_data_dir / TRAINING_FPATH, index_col=0)
+    if training_percent is not None:
+        print(f"Down-sampling training data to {training_percent:.2%} size!")
+        downsample_df = src_df.copy()
+        downsample_df["original_index"] = np.arange(len(src_df))
+        downsample_df = downsample_df.groupby(["solute_smiles", "solvent_smiles", "source"]).aggregate(list)
+        downsample_df = downsample_df.sample(frac=training_percent, replace=False, random_state=random_seed)
+        chosen_indexes = downsample_df.explode("original_index")["original_index"].to_numpy().flatten().astype(int)
+        print(f"Actual downsample percentage is {len(chosen_indexes)/len(src_df):.2%}, count: {len(chosen_indexes)}!")
+        src_df = src_df.iloc[chosen_indexes]
+        src_df.reset_index(inplace=True, drop=True)
+
     all_validation_results = []
     for replicate_number in range(NUM_REPLICATES):
         print(f"Training model {replicate_number+1} of {NUM_REPLICATES} ({random_seed=})")
-        # load the training data
-        df = pd.read_csv(_data_dir / TRAINING_FPATH, index_col=0)
-
-        if training_percent is not None:
-            print(f"Down-sampling training data to {training_percent:.2%} size!")
-            downsample_df = df.copy()
-            downsample_df["original_index"] = np.arange(len(df))
-            downsample_df = downsample_df.groupby(["solute_smiles", "solvent_smiles", "source"]).aggregate(list)
-            downsample_df = downsample_df.sample(frac=training_percent, replace=False, random_state=random_seed)
-            chosen_indexes = downsample_df.explode("original_index")["original_index"].to_numpy().flatten().astype(int)
-            print(f"Actual downsample percentage is {len(chosen_indexes)/len(df):.2%}, count: {len(chosen_indexes)}!")
-            df = df.iloc[chosen_indexes]
-            df.reset_index(inplace=True, drop=True)
-
+        df = src_df.copy()
         # split the data s.t. model only sees a subset of the studies used to aggregate the training data
         studies_train, studies_val = train_test_split(pd.unique(df["source"]), random_state=random_seed, train_size=0.90, test_size=0.10)
         train_indexes = df.index[df["source"].isin(studies_train)].tolist()
@@ -153,7 +166,7 @@ def train_ensemble(*, training_percent=None, **model_kwargs):
 
         # build Chemprop
         mcmp = nn.MulticomponentMessagePassing(
-            blocks=[nn.BondMessagePassing(depth=3, d_h=800) for _ in range(len(all_data))],  # dropout=0.2
+            blocks=[nn.BondMessagePassing(depth=3, d_h=800) for _ in range(len(all_data))],
             n_components=len(all_data),
         )
         agg = nn.MeanAggregation()
@@ -162,7 +175,6 @@ def train_ensemble(*, training_percent=None, **model_kwargs):
             input_dim=mcmp.output_dim + 1,  # temperature
             hidden_dim=800,
             n_layers=2,
-            # dropout=0.5,
             criterion=CustomMSEMetric(),
             output_transform=output_transform,
         )
@@ -175,9 +187,6 @@ def train_ensemble(*, training_percent=None, **model_kwargs):
             batch_norm=True,
             metrics=metric_list,
             X_d_transform=X_d_transform,
-            # init_lr=0.00001,
-            # max_lr=0.00001,
-            # final_lr=0.00001,
         )
         print(mcmpnn)
         try:
@@ -192,15 +201,15 @@ def train_ensemble(*, training_percent=None, **model_kwargs):
         )
         callbacks = [
             EarlyStopping(
-                monitor="val/mse",
+                monitor="val_loss",
                 mode="min",
                 verbose=False,
-                patience=10,
+                patience=15,
             ),
             ModelCheckpoint(
-                monitor="val/mse",
+                monitor="val_loss",
                 dirpath=os.path.join(_output_dir, "checkpoints"),
-                filename=f"repetition-{repetition_number}" + "-{epoch:02d}",
+                filename=f"repetition-{repetition_number}" + "-{epoch:02d}-{val_loss:.02f}",
                 save_top_k=1,
                 mode="min",
             ),
@@ -213,6 +222,8 @@ def train_ensemble(*, training_percent=None, **model_kwargs):
             enable_checkpointing=True,
             check_val_every_n_epoch=1,
             callbacks=callbacks,
+            # to enable sobolev loss during validation
+            inference_mode=False,
         )
 
         trainer.fit(mcmpnn, train_loader, val_loader)
@@ -240,8 +251,7 @@ def rename_recent_dir(updated_name):
 
 
 if __name__ == "__main__":
-    # train_ensemble()
-    # exit(0)
+    # train_ensemble(training_percent=1.0)
     for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
         training_percent = training_count / 5215
         train_ensemble(training_percent=training_percent)

@@ -11,8 +11,7 @@ from pytorch_lightning import Trainer
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from scipy.stats import pearsonr
 
-from data import SolubilityDataset
-from model import fastpropSolubility
+from classes import SolubilityDataset, fastpropSolubility
 
 RANDOM_SEED = 1701  # the final frontier
 
@@ -48,11 +47,10 @@ def test_ensemble(checkpoint_dir: Path):
         all_models.append(model)
     rmses = []
     for holdout_fpath in (
-        Path("boobier/leeds_acetone.csv"),
-        Path("boobier/leeds_benzene.csv"),
-        Path("boobier/leeds_ethanol.csv"),
-        # Path("krasnov/bigsoldb_downsample.csv"),
-        Path("vermeire/solprop_nonaq.csv"),
+        Path("boobier/leeds_acetone_fastprop.csv"),
+        Path("boobier/leeds_benzene_fastprop.csv"),
+        Path("boobier/leeds_ethanol_fastprop.csv"),
+        Path("vermeire/solprop_fastprop_nonaq.csv"),
     ):
         # load the holdout data
         df = pd.read_csv(Path("../../data") / holdout_fpath, index_col=0)
@@ -107,21 +105,13 @@ def test_ensemble(checkpoint_dir: Path):
 
 if __name__ == "__main__":
     # single runs
-    # test_ensemble(Path("output/gradprop/checkpoints"))
-    # test_ensemble(Path("output/fastprop/checkpoints"))
+    # test_ensemble(Path("output/test/checkpoints"))
     # aleatoric error study
-    sobolev_leeds_results = []
-    nonsobolev_leeds_results = []
-    sobolev_solprop_results = []
-    nonsobolev_solprop_results = []
+    fastprop_sobolev_leeds_results = []
+    fastprop_sobolev_solprop_results = []
     for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
-        leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"output/fastprop_sobolev_{training_count}/checkpoints"))
-        sobolev_leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
-        sobolev_solprop_results.append(solprop)
         leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"output/fastprop_{training_count}/checkpoints"))
-        nonsobolev_leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
-        nonsobolev_solprop_results.append(solprop)
-    print(f"{sobolev_solprop_results=}")
-    print(f"{nonsobolev_solprop_results=}")
-    print(f"{sobolev_leeds_results=}")
-    print(f"{nonsobolev_leeds_results=}")
+        fastprop_sobolev_leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
+        fastprop_sobolev_solprop_results.append(solprop)
+    print(f"{fastprop_sobolev_solprop_results=}")
+    print(f"{fastprop_sobolev_leeds_results=}")

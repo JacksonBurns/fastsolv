@@ -1,5 +1,5 @@
 """
-model.py - solubility prediction model definition
+classes.py - solubility prediction model definition and associated classes
 
 batches are organized (solute, solvent, temperature)
 """
@@ -9,8 +9,40 @@ from types import SimpleNamespace
 from typing import Literal
 
 import torch
+from torch.utils.data import Dataset as TorchDataset
 from fastprop.data import inverse_standard_scale, standard_scale
 from fastprop.model import fastprop as _fastprop
+
+
+class SolubilityDataset(TorchDataset):
+    def __init__(
+        self,
+        solute_features: torch.Tensor,
+        solvent_features: torch.Tensor,
+        temperature: torch.Tensor,
+        solubility: torch.Tensor,
+        solubility_gradient: torch.Tensor,
+    ):
+        self.solute_features = solute_features
+        self.solvent_features = solvent_features
+        self.temperature = temperature
+        self.solubility = solubility
+        self.solubility_gradient = solubility_gradient
+        self.length = len(solubility)
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, index):
+        return (
+            (
+                self.solute_features[index],
+                self.solvent_features[index],
+                self.temperature[index],
+            ),
+            self.solubility[index],
+            self.solubility_gradient[index],
+        )
 
 
 class Concatenation(torch.nn.Module):
@@ -251,7 +283,11 @@ class GradPropPhys(fastpropSolubility):
         self.save_hyperparameters()
 
     def forward(self, batch):
-        solute_features, solvent_features, temperature, = batch
+        (
+            solute_features,
+            solvent_features,
+            temperature,
+        ) = batch
         solute_representation = self.solute_fnn((solute_features, temperature))
         solvent_representation = self.solvent_fnn((solvent_features, temperature))
         return self.fnn((solute_representation, solvent_representation, temperature))

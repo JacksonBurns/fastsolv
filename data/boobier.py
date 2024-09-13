@@ -33,4 +33,7 @@ for src_file, solvent_smiles in zip(
 
     fastprop_data = get_descs(all_data)
     fastprop_data = drop_overlap(fastprop_data, "krasnov")
-    fastprop_data.to_csv(_dest / ("leeds_" + Path(src_file).stem.split("_")[0] + ".csv"))
+    fastprop_data.to_csv(_dest / ("leeds_" + Path(src_file).stem.split("_")[0] + "_fastprop.csv"))
+    fastprop_data[["logS", "temperature", "solvent_smiles", "solute_smiles"]].to_csv(
+        _dest / ("leeds_" + Path(src_file).stem.split("_")[0] + "_chemprop.csv")
+    )
