@@ -15,7 +15,7 @@ from ._classes import SolubilityDataset, _fastsolv
 
 SOLUTE_COLUMNS = ["solute_" + d for d in ALL_2D]
 SOLVENT_COLUMNS = ["solvent_" + d for d in ALL_2D]
-DESCRIPTOR_COLUMNS: list[str] = SOLUTE_COLUMNS + SOLVENT_COLUMNS
+DESCRIPTOR_COLUMNS = SOLUTE_COLUMNS + SOLVENT_COLUMNS
 
 
 def fastsolv(df):
