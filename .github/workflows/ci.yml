@@ -17,6 +17,13 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  debug:
+    name: debug
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          pwd
+          ls
   check-formatting:
     name: Check Formatting Errors
     runs-on: ubuntu-latest
