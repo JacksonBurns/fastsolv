@@ -1,40 +1,21 @@
 import os
-from typing import List, Optional
+import warnings
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import torch
-from pytorch_lightning import Trainer
-from torch.utils.data import TensorDataset
-
-from fastprop.data import clean_dataset, fastpropDataLoader
-from fastprop.defaults import DESCRIPTOR_SET_LOOKUP, init_logger
+from fastprop.data import fastpropDataLoader
+from fastprop.defaults import ALL_2D
 from fastprop.descriptors import get_descriptors
-from fastprop.io import load_saved_descriptors
-from fastprop.model import fastprop
-import argparse
-import datetime
-import sys
-from importlib.metadata import version
-from time import perf_counter
+from pytorch_lightning import Trainer
 from rdkit import Chem
-import warnings
 
-import yaml
-
-from fastprop.defaults import ALL_2D
-from pathlib import Path
-
-from fastprop import DEFAULT_TRAINING_CONFIG
-from fastprop.defaults import init_logger
-
-from fastprop.defaults import ALL_2D
+from ._classes import SolubilityDataset, _fastsolv
 
 SOLUTE_COLUMNS = ["solute_" + d for d in ALL_2D]
 SOLVENT_COLUMNS = ["solvent_" + d for d in ALL_2D]
-DESCRIPTOR_COLUMNS: list[str] =  SOLUTE_COLUMNS + SOLVENT_COLUMNS
-
-from ._classes import _fastsolv, SolubilityDataset
+DESCRIPTOR_COLUMNS: list[str] = SOLUTE_COLUMNS + SOLVENT_COLUMNS
 
 
 def fastsolv(df):
@@ -50,16 +31,17 @@ def fastsolv(df):
         np.hstack((smiles_to_descs[solute], smiles_to_descs[solvent]))
         for solute, solvent in zip(fastprop_data["solute_smiles"], fastprop_data["solvent_smiles"])
     ]
-    
-    
-# load the models
+
+    # load the models
     all_models = []
     ckpt_dir = Path(__file__).parent / "checkpoints"
     if not ckpt_dir.exists():
-        print(f"""
+        print(
+            f"""
 This is a pre-release of fastsolv and does not yet support automatic downloading of model weights, since they are not yet released.
 Please manually download the trained model files into {ckpt_dir}
-""")
+"""
+        )
         exit(1)
     for checkpoint in os.listdir(ckpt_dir):
         model = _fastsolv.load_from_checkpoint(os.path.join(ckpt_dir, checkpoint))

@@ -9,9 +9,9 @@ from types import SimpleNamespace
 from typing import Literal
 
 import torch
-from torch.utils.data import Dataset as TorchDataset
 from fastprop.data import inverse_standard_scale, standard_scale
 from fastprop.model import fastprop as _fastprop
+from torch.utils.data import Dataset as TorchDataset
 
 
 class SolubilityDataset(TorchDataset):
