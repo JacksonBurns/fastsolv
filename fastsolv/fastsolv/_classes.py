@@ -177,7 +177,7 @@ class _fastsolv(_fastprop):
         return inverse_standard_scale(logits, self.target_means, self.target_vars)
 
     @torch.enable_grad()
-    def _custom_loss(self, batch: tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor, torch.Tensor], name: str):
+    def _custom_loss(self, batch, name):
         (_solute, _solvent, temperature), y, y_grad = batch
         temperature.requires_grad_()
         y_hat: torch.Tensor = self.forward((_solute, _solvent, temperature))
@@ -196,14 +196,14 @@ class _fastsolv(_fastprop):
         self.log(f"{name}_dlogSdT_scaled_loss", y_grad_loss)
         return loss, y_hat
 
-    def _plain_loss(self, batch: tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor, torch.Tensor], name: str):
+    def _plain_loss(self, batch, name):
         (_solute, _solvent, temperature), y, y_grad = batch
         y_hat: torch.Tensor = self.forward((_solute, _solvent, temperature))
         loss = torch.nn.functional.mse_loss(y_hat, y, reduction="mean")
         self.log(f"{name}_{self.training_metric}_scaled_loss", loss)
         return loss, y_hat
 
-    def _loss(self, batch: tuple[tuple[torch.Tensor, torch.Tensor, torch.Tensor], torch.Tensor, torch.Tensor], name: str):
+    def _loss(self, batch, name):
         if int(os.environ.get("DISABLE_CUSTOM_LOSS", 0)):
             return self._plain_loss(batch, name)
         else:
