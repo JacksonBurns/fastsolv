@@ -56,13 +56,10 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install ./fastsolv
-          python -m pip install coverage pytest
+          python -m pip install pytest
       - name: Run Tests
         run: |
-          coverage run --source=./fastsolv -m pytest -vs
-      - name: Show Coverage
-        run: |
-          coverage report -m
+          pytest -v fastsolv/test
   
   check-for-new-release:
     runs-on: ubuntu-latest
