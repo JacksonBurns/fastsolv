@@ -10,7 +10,7 @@ on:
 
 defaults:
   run:
-    working-directory: ./fastsolv
+    working-directory: fastsolv
 
 concurrency:
   group: actions-id-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
