@@ -15,3 +15,7 @@ dev
 # WIP
 fastprop_sobolev*
 data/dortmund.py
+final_results/
+best_pre_tloss/
+*.zip
+*.pptx
