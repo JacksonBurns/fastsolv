@@ -8,10 +8,6 @@ on:
     branches: [main]
   workflow_dispatch:
 
-defaults:
-  run:
-    working-directory: fastsolv
-
 concurrency:
   group: actions-id-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -25,11 +21,11 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install pycodestyle autopep8
-          python -m pip install .
+          python -m pip install ./fastsolv
       
       - name: Run pycodestyle
         run: |
-          pycodestyle --statistics --count --max-line-length=150 --show-source .
+          pycodestyle --statistics --count --max-line-length=150 --show-source ./fastsolv
 
   build-and-test:
     needs: check-formatting
@@ -59,11 +55,11 @@ jobs:
             python=${{ matrix.python-version }}
       - name: Install Dependencies
         run: |
-          python -m pip install .
+          python -m pip install ./fastsolv
           python -m pip install coverage pytest
       - name: Run Tests
         run: |
-          coverage run --source=. -m pytest -vs
+          coverage run --source=./fastsolv -m pytest -vs
       - name: Show Coverage
         run: |
           coverage report -m
@@ -77,7 +73,7 @@ jobs:
         uses: maybe-hello-world/pyproject-check-version@v3
         id: versioncheck
         with:
-          pyproject-path: "./pyproject.toml"
+          pyproject-path: "./fastsolv/pyproject.toml"
     
       - name: Report Results
         run: |
@@ -110,12 +106,13 @@ jobs:
         build
         --sdist
         --wheel
-        --outdir dist/
-        .
+        --outdir ./fastsolv/dist/
+        ./fastsolv
     - name: Publish distribution to PyPI
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
         skip-existing: true
         verbose: true
+        packages-dir: ./fastsolv/dist/
         
