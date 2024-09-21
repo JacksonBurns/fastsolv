@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from utils import drop_bigsol_overlap, get_descs
+from utils import drop_overlap, get_descs
 
 _dest = Path("boobier")
 if not Path.exists(_dest):
@@ -32,5 +32,8 @@ for src_file, solvent_smiles in zip(
     all_data.insert(0, "solvent_smiles", solvent_smiles)
 
     fastprop_data = get_descs(all_data)
-    fastprop_data = drop_bigsol_overlap(fastprop_data)
-    fastprop_data.to_csv(_dest / ("leeds_" + Path(src_file).stem.split("_")[0] + ".csv"))
+    fastprop_data = drop_overlap(fastprop_data, "krasnov")
+    fastprop_data.to_csv(_dest / ("leeds_" + Path(src_file).stem.split("_")[0] + "_fastprop.csv"))
+    fastprop_data[["logS", "temperature", "solvent_smiles", "solute_smiles"]].to_csv(
+        _dest / ("leeds_" + Path(src_file).stem.split("_")[0] + "_chemprop.csv")
+    )

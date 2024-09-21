@@ -5,19 +5,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from fastprop.data import fastpropDataLoader
-from fastprop.defaults import ALL_2D
-from pytorch_lightning import Trainer
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+from lightning.pytorch import Trainer
 from scipy.stats import pearsonr
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-from data import SolubilityDataset
-from model import fastpropSolubility
+from chemprop import data as chemprop_data_utils
+from chemprop import featurizers
+from chemprop.models import load_model
 
-RANDOM_SEED = 1701  # the final frontier
-
-SOLUTE_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D]
-SOLVENT_COLUMNS: list[str] = ["solvent_" + d for d in ALL_2D]
+from train import CustomMSEMetric  # needed to load model (or do we just need to call the registry?)
 
 
 def parity_plot(truth, prediction, title, out_fpath, stat_str):
@@ -36,7 +32,7 @@ def parity_plot(truth, prediction, title, out_fpath, stat_str):
     plt.title(title)
     plt.savefig(out_fpath)
     print("wrote plot to", out_fpath)
-    plt.show()
+    # plt.show()
 
 
 def test_ensemble(checkpoint_dir: Path):
@@ -44,49 +40,46 @@ def test_ensemble(checkpoint_dir: Path):
     # reload the models as an ensemble
     all_models = []
     for checkpoint in os.listdir(checkpoint_dir):
-        model = fastpropSolubility.load_from_checkpoint(checkpoint_dir / checkpoint)
+        model = load_model(checkpoint_dir / checkpoint, multicomponent=True)
         all_models.append(model)
+    rmses = []
     for holdout_fpath in (
-        Path("boobier/leeds_acetone.csv"),
-        Path("boobier/leeds_benzene.csv"),
-        Path("boobier/leeds_ethanol.csv"),
-        Path("krasnov/bigsoldb_downsample.csv"),
-        Path("vermeire/solprop_nonaq.csv"),
+        Path("boobier/leeds_acetone_chemprop.csv"),
+        Path("boobier/leeds_benzene_chemprop.csv"),
+        Path("boobier/leeds_ethanol_chemprop.csv"),
+        Path("vermeire/solprop_chemprop_nonaq.csv"),
     ):
         # load the holdout data
         df = pd.read_csv(Path("../../data") / holdout_fpath, index_col=0)
-        solubilities = torch.tensor(df["logS"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
-        temperatures = torch.tensor(df["temperature"].to_numpy(), dtype=torch.float32).unsqueeze(-1)
-        solute_features = torch.tensor(df[SOLUTE_COLUMNS].to_numpy(), dtype=torch.float32)
-        solvent_features = torch.tensor(df[SOLVENT_COLUMNS].to_numpy(), dtype=torch.float32)
-        smiles = df[["solvent_smiles", "solute_smiles"]].apply(lambda row: ".".join(row), axis=1).tolist()
-        dataloader = fastpropDataLoader(
-            SolubilityDataset(
-                solute_features,
-                solvent_features,
-                temperatures,
-                solubilities,
-                torch.zeros_like(solubilities),
-            ),
-            batch_size=len(solubilities),
-        )
+        test_datapoints = [
+            [
+                chemprop_data_utils.MoleculeDatapoint.from_smi(smi, None, x_d=np.array([temperature]))
+                for smi, temperature in zip(df["solute_smiles"], df["temperature"])
+            ],
+            list(map(chemprop_data_utils.MoleculeDatapoint.from_smi, df["solvent_smiles"])),
+        ]
+        featurizer = featurizers.SimpleMoleculeMolGraphFeaturizer()
+        test_datasets = [chemprop_data_utils.MoleculeDataset(test_datapoints[i], featurizer) for i in range(len(test_datapoints))]
+        test_mcdset = chemprop_data_utils.MulticomponentDataset(test_datasets)
+        test_loader = chemprop_data_utils.build_dataloader(test_mcdset, shuffle=False)
         # run inference
         # axis: contents
         # 0: smiles
         # 1: predictions
         # 2: per-model
         trainer = Trainer(logger=False, enable_progress_bar=False)
-        all_predictions = np.stack([torch.vstack(trainer.predict(model, dataloader)).numpy(force=True) for model in all_models], axis=2)
+        all_predictions = np.stack([torch.vstack(trainer.predict(model, test_loader)).numpy(force=True) for model in all_models], axis=2)
         perf = np.mean(all_predictions, axis=2)
         err = np.std(all_predictions, axis=2)
         # interleave the columns of these arrays, thanks stackoverflow.com/a/75519265
         res = np.empty((len(perf), perf.shape[1] * 2), dtype=perf.dtype)
         res[:, 0::2] = perf
         res[:, 1::2] = err
-        out = pd.DataFrame(res, columns=["logS_pred", "stdev"], index=smiles)
-        out.index.name = "smiles"
-        out.insert(0, "logS_true", df["logS"].tolist())
-        out.insert(1, "temperature", df["temperature"].tolist())
+        out = pd.DataFrame(res, columns=["logS_pred", "stdev"], index=np.arange(len(df)))
+        out.insert(0, "solute_smiles", df["solute_smiles"].tolist())
+        out.insert(1, "solvent_smiles", df["solvent_smiles"].tolist())
+        out.insert(2, "logS_true", df["logS"].tolist())
+        out.insert(3, "temperature", df["temperature"].tolist())
         out.to_csv(_output_dir / (holdout_fpath.stem + "_predictions.csv"))
 
         # performance metrics
@@ -100,7 +93,18 @@ def test_ensemble(checkpoint_dir: Path):
             f" - Pearson's r: {r:.4f}\n - MAE: {mae:.4f}\n - MSE: {mse:.4f}\n - RMSE: {rmse:.4f}\n - W/n 0.7: {wn_07:.4f}\n - W/n 1.0: {wn_1:.4f}"
         )
         parity_plot(out["logS_true"], out["logS_pred"], holdout_fpath.stem, _output_dir / f"{holdout_fpath.stem}_parity.png", stat_str)
+        rmses.append(rmse)
+    return rmses
 
 
 if __name__ == "__main__":
-    test_ensemble(Path("output/best/checkpoints"))
+    # test_ensemble(Path("output/idek/checkpoints"))
+    # exit(0)
+    chemprop_sobolev_leeds_results = []
+    chemprop_sobolev_solprop_results = []
+    for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
+        leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"output/chemprop_{training_count}/checkpoints"))
+        chemprop_sobolev_leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
+        chemprop_sobolev_solprop_results.append(solprop)
+    print(f"{chemprop_sobolev_solprop_results=}")
+    print(f"{chemprop_sobolev_leeds_results=}")
