@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>fastsolv Solid Solubility Predictor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .container {
+            width: 600px;
+            margin: 0 auto;
+        }
+        .static-explanation {
+            background-color: #f9f9f9;
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+        .grid input {
+            padding: 10px;
+        }
+        .submit-btn-container {
+            text-align: center;  /* Center the submit button */
+            margin-top: 20px;
+        }
+        .submit-btn {
+            padding: 10px 20px;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .submit-btn:hover {
+            background-color: #0056b3;
+        }
+        .result-table {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>fastsolv Solid Solubility Predictor</h1>
+    
+    <!-- Static explanation text box -->
+    <div class="static-explanation">
+        <p>
+            This site provides free access to the fastsolv solid solubility prediction model described in DOI.
+            Contact jwburns|@|mit.edu for any issues.
+            <br>
+            To run predictions on more than 10 samples at a time please install and run fastprop locally, see github.com/jacksonburns/fastsolv.
+            <br>
+            Please cite DOI if you use these predictions in published work.
+        </p>
+    </div>
+
+    <form method="POST">
+        <div class="grid">
+            <!-- Generate 10x3 grid of text inputs with specific placeholders for columns -->
+            {% for i in range(10) %}
+                <input type="text" name="field_{{ i }}_0" placeholder="Solute Smiles"> 
+                <input type="text" name="field_{{ i }}_1" placeholder="Solvent Smiles"> 
+                <input type="text" name="field_{{ i }}_2" placeholder="Temperature (Kelvin)"> 
+            {% endfor %}
+        </div>
+        
+        <!-- Center the submit button -->
+        <div class="submit-btn-container">
+            <button type="submit" class="submit-btn">Submit</button>
+        </div>
+    </form>
+
+    <!-- Display the resulting DataFrame -->
+    {% if result %}
+        <div class="result-table">
+            <h2>Results:</h2>
+            {{ result|safe }}
+        </div>
+    {% endif %}
+</div>
+
+</body>
+</html>
