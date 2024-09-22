@@ -56,6 +56,8 @@ Please manually download the trained model files into {ckpt_dir}
             torch.zeros(len(df), dtype=torch.float32),
             torch.zeros(len(df), dtype=torch.float32),
         ),
+        num_workers=0,
+        persistent_workers=False,
     )
     # run inference
     # axis: contents
