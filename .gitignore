@@ -1,15 +1,20 @@
 SolProp_v1.2*
 *.csv
+*xls
 *highsol_training
 paper/paper.pdf
 *.pyc
-models/fastprop_custom/output*
-models/fastprop_custom/.output*
-models/fastprop_custom/transfer_optimal
+models/fastprop/output
+models/chemprop/output
+fastprop_sobolev/*output*
 checkpoints/
 slurm*err
 slurm*out
 aqsol
+dev
+# WIP
+fastprop_sobolev*
+data/dortmund.py
 final_results/
 best_pre_tloss/
 *.zip

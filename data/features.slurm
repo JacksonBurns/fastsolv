@@ -15,6 +15,6 @@ mkdir -p /state/partition1/user/jburns
 
 cd /home/gridsan/jburns/fastsolv/data
 export OMP_NUM_THREADS=1
-python krasnov.py
 python vermeire.py
+python krasnov.py
 python boobier.py
