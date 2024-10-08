@@ -19,3 +19,6 @@ final_results/
 best_pre_tloss/
 *.zip
 *.pptx
+final_absolute_performance_results/
+old_results/
+results/
