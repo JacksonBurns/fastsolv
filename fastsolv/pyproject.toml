@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fastsolv"
+version = "1.0.0a0"
+authors = [
+    { name = "Jackson Burns" },
+]
+license = { text = "MIT" }
+description = "fastsolv solid solubility predictor"
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+urls = { Homepage = "https://github.com/JacksonBurns/fastsolv" }
+requires-python = ">=3.8"
+dependencies = ["fastprop", "torch", "pandas", "numpy"]
+
+[project.readme]
+file = "README.md"
+content-type = "text/markdown"
+
+[project.scripts]
+fastsolv = "fastsolv:fastsolv_predict"
+
+[tool.isort]
+profile = "black"
+
+[tool.black]
+line-length = 150
+
+[tool.autopep8]
+max_line_length = 150
+in-place = true
+recursive = true
+aggressive = 3
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["fastsolv*"]
+exclude = [""]
