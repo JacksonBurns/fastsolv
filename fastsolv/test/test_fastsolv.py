@@ -32,3 +32,4 @@ class TestModule(_CSVManager, unittest.TestCase):
     def test_module(self):
         df = pd.read_csv(self.input)
         out = fastsolv(df)
+        assert out.any().any()
