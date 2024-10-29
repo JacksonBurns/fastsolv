@@ -8,7 +8,7 @@ from fastprop.descriptors import get_descriptors
 from rdkit import Chem
 
 DESCRIPTOR_COLUMNS: list[str] = ["solute_" + d for d in ALL_2D] + ["solvent_" + d for d in ALL_2D]
-DROP_WATER = False
+DROP_WATER = True
 
 
 def get_descs(src_df: pd.DataFrame):
