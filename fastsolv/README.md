@@ -1,7 +1,7 @@
 # `fastsolv`
 This directory contains the `fastsolv` python package which allows using the trained `fastsolv` model for solid solubility prediction.
 
-Run `pip install fastsolv` to install it.
+Run `pip install fastsolv` to install it from PyPI.
 Trained model checkpoints will be auto-magically downloaded on your first run of `fastsolv`.
 
 `fastsolv` is accessible via the command line and as a python module.
