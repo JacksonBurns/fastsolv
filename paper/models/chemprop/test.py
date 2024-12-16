@@ -5,15 +5,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
-from lightning.pytorch import Trainer
-from scipy.stats import pearsonr
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-
 from chemprop import data as chemprop_data_utils
 from chemprop import featurizers
 from chemprop.models import load_model
-
-from train import CustomMSEMetric  # needed to load model (or do we just need to call the registry?)
+from lightning.pytorch import Trainer
+from scipy.stats import pearsonr
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from train import (
+    CustomMSEMetric,  # needed to load model (or do we just need to call the registry?)
+)
 
 
 def parity_plot(truth, prediction, title, out_fpath, stat_str):
@@ -98,13 +98,13 @@ def test_ensemble(checkpoint_dir: Path):
 
 
 if __name__ == "__main__":
-    # test_ensemble(Path("output/idek/checkpoints"))
-    # exit(0)
-    chemprop_sobolev_leeds_results = []
-    chemprop_sobolev_solprop_results = []
-    for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
-        leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"output/chemprop_{training_count}/checkpoints"))
-        chemprop_sobolev_leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
-        chemprop_sobolev_solprop_results.append(solprop)
-    print(f"{chemprop_sobolev_solprop_results=}")
-    print(f"{chemprop_sobolev_leeds_results=}")
+    test_ensemble(Path("output/idek/checkpoints"))
+    exit(0)
+    # chemprop_sobolev_leeds_results = []
+    # chemprop_sobolev_solprop_results = []
+    # for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
+    #     leeds_acetone, leeds_benzene, leeds_ethanol, solprop = test_ensemble(Path(f"output/chemprop_{training_count}/checkpoints"))
+    #     chemprop_sobolev_leeds_results.append([leeds_acetone, leeds_benzene, leeds_ethanol])
+    #     chemprop_sobolev_solprop_results.append(solprop)
+    # print(f"{chemprop_sobolev_solprop_results=}")
+    # print(f"{chemprop_sobolev_leeds_results=}")
