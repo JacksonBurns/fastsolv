@@ -191,3 +191,6 @@ final_absolute_performance_results/
 old_results/
 results/
 old_analysis/
+
+# for fastsolv demo
+!fastsolv/demo.csv

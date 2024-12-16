@@ -1,0 +1,5 @@
+solvent_smiles,solute_smiles,temperature
+CO,CC(=O)Nc1ccc(O)cc1,298
+CO,CC(=O)Nc1ccc(O)cc1,340
+CCO,CC(=O)Nc1ccc(O)cc1,312
+CCO,CC(=O)Nc1ccc(O)cc1,270
