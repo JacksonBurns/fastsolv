@@ -7,17 +7,16 @@ import numpy as np
 import pandas as pd
 import torch
 from astartes import train_test_split
+from chemprop import data as chemprop_data_utils
+from chemprop import featurizers, nn
+from chemprop.models import multi
+from chemprop.nn import metrics
 from lightning import pytorch as pl
 from lightning.pytorch import seed_everything
 from lightning.pytorch.callbacks import ModelCheckpoint
 from lightning.pytorch.callbacks.early_stopping import EarlyStopping
 from lightning.pytorch.loggers import TensorBoardLogger
 from sklearn.preprocessing import StandardScaler
-
-from chemprop import data as chemprop_data_utils
-from chemprop import featurizers, nn
-from chemprop.models import multi
-from chemprop.nn import metrics
 
 NUM_REPLICATES = 4
 RANDOM_SEED = 1701  # the final frontier
@@ -251,8 +250,8 @@ def rename_recent_dir(updated_name):
 
 
 if __name__ == "__main__":
-    # train_ensemble(training_percent=1.0)
-    for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
-        training_percent = training_count / 5215
-        train_ensemble(training_percent=training_percent)
-        rename_recent_dir(f"chemprop_{training_count}")
+    train_ensemble(training_percent=1.0)
+    # for training_count in (20, 50, 100, 200, 500, 1000, 2000, 3500, 5215):
+    #     training_percent = training_count / 5215
+    #     train_ensemble(training_percent=training_percent)
+    #     rename_recent_dir(f"chemprop_{training_count}")

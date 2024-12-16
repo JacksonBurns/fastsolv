@@ -16,19 +16,18 @@ Be sure to then also install polars, either via pip or conda.
 
 from pathlib import Path
 
-from _solprop import make_solubility_prediction
-
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
-import polars as pl
 import numpy as np
+import polars as pl
+from _solprop import make_solubility_prediction
+from scipy.stats import pearsonr
+from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 for dataset in (
-    Path("data/boobier/leeds_acetone.csv"),
-    Path("data/boobier/leeds_benzene.csv"),
-    Path("data/boobier/leeds_ethanol.csv"),
-    Path("data/vermeire/solprop_nonaq.csv"),
+    Path("../data/boobier/leeds_acetone.csv"),
+    Path("../data/boobier/leeds_benzene.csv"),
+    Path("../data/boobier/leeds_ethanol.csv"),
+    Path("../data/vermeire/solprop_nonaq.csv"),
 ):
     df = pl.read_csv(dataset, columns=["solute_smiles", "solvent_smiles", "temperature", "logS"])
     solute_list = df["solute_smiles"].to_list()
@@ -79,5 +78,4 @@ for dataset in (
     plt.xlim(min_val, max_val)
     plt.text(min_val, max_val - 0.1, stat_str, horizontalalignment="left", verticalalignment="top")
     plt.title(dataset.stem)
-    plt.savefig(Path("figures", dataset.stem + "_vermeire_results.png"))
-    
+    plt.savefig(Path("../analysis/figures", dataset.stem + "_vermeire_results.png"))
