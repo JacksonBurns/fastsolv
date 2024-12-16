@@ -150,6 +150,7 @@ The `models` directory contains the model definitions for the `fastprop`- and ch
 Each can be executed by running `python train.py` and then `python test.py`.
 For the former, the random splitting seed is specified at the top of the file and the very bottom of the file contains the call to `train_ensemble` that actually initiates model training (the generation of the aleatoric error plot data is shown in comments).
 For the latter, the filepath to the trained model must be edited at the bottom of the file.
+Individual model training takes a few minutes with a GPU-accelerated laptop computer.
 
 ### Analysis
 The directory contains jupyter notebook which can be opened in Visual Studio Code (or any other similar software) and executed.
