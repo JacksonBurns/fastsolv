@@ -25,7 +25,7 @@ For hyperparameter optimization specifically, `ray` and `optuna` are also requir
 
 For data munging the Krasnov dataset, the `thermo` package is also required.
 
-Finally for visualizations, `matplotlib`, `seaborn`, and `matplotlib_venn` are required.
+Finally for visualizations and analysis, `matplotlib`, `seaborn`, `matplotlib_venn`, `sklearn`, and `scipy` are required.
 
 A graphics processing unit (GPU) is optional for training, but speeds it up significantly and is highly recommended.
 Scripts for training `fastsolv` on remote computing resources are included as a demonstration but are not functional for other systems than our own.
@@ -154,4 +154,4 @@ Individual model training takes a few minutes with a GPU-accelerated laptop comp
 
 ### Analysis
 The directory contains jupyter notebook which can be opened in Visual Studio Code (or any other similar software) and executed.
-They reproduce the figures shown in the paper.
+They reproduce the figures shown in the paper. 
