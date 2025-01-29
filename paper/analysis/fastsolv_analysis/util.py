@@ -87,3 +87,20 @@ def residual_cumsum(merged_fastprop, merged_chemprop, feature):
     plt.tight_layout()
     plt.show()
     return
+
+def residual_dist(merged_fastprop, merged_chemprop, feature):
+    
+    merged_fastprop_sorted_weight = merged_fastprop.sort_values(by=feature)
+    merged_chemprop_sorted_weight = merged_chemprop.sort_values(by=feature)
+
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.plot(merged_fastprop_sorted_weight[feature], merged_fastprop_sorted_weight['squared_residual'], label='Fastprop', color='blue')
+    plt.plot(merged_chemprop_sorted_weight[feature], merged_chemprop_sorted_weight['squared_residual'], label='Chemprop', color='red')
+    plt.title('Residuals vs ' + feature)
+    plt.xlabel(feature)
+    plt.ylabel('Residual')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+    return
