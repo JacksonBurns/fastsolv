@@ -18,7 +18,7 @@ torch
 pytorch-lightning
 astartes
 fastprop
-chemprop>2
+chemprop>=2,<2.1
 ```
 
 For hyperparameter optimization specifically, `ray` and `optuna` are also required.
