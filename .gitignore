@@ -15,6 +15,7 @@ slurm*err
 slurm*out
 aqsol
 dev
+paper/demo_output
 # WIP
 fastprop_sobolev*
 data/dortmund.py

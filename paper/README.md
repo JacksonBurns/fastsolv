@@ -2,6 +2,9 @@
 
 This directory contains the code for model development, training, and analysis.
 Additional code for running the Vermeire et. al model is also provided.
+This code is primarily intended to aid in reproducing the results of the original study, but it may also be used to train models on new targets or extend the model architecture.
+
+See `sobolev_demo.ipynb` for a worked example of how Sobolev training works on a single-molecule property.
 
 ## Installation
 Installation should take less than ten minutes.
@@ -132,8 +135,14 @@ pip install polars  # needed only for our use-case
 
 ## Usage
 
+For an example of training a single-molecule model with Sobolev training, see `sobolev_demo.ipynb`.
+
+To reproduce the results of the original study, see the below instructions.
 The data must be downloaded and munged first using the scripts in `data.py` before running or analyzing either our models or the Vermeire et. al model.
 Upon running, scripts will generate the corresponding numerical results (such as RMSE) and/or plots/figures.
+
+To adapt the code in this repository for your own target properties, follow the below workflow but substitute in your data.
+For properties defined on pairs of molecules the code will work directly (just keep track of which names are expected for the various inputs) and for single molecule properties see `sobolev_demo.ipynb`.
 
 ### Data
 
