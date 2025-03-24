@@ -50,6 +50,7 @@ jobs:
           miniforge-version: latest
           python-version: ${{ matrix.python-version }}
           use-mamba: true
+          conda-remove-defaults: true
       - name: Install Dependencies
         run: |
           python -m pip install ./fastsolv

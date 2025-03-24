@@ -37,7 +37,10 @@ def index():
         df.replace("", np.nan, inplace=True)
         df.dropna(inplace=True)
         df['temperature'] = df['temperature'].astype(float)
-        result_df = fastsolv(df)
+        try:
+            result_df = fastsolv(df)
+        except Exception as e:
+            result_df = pd.DataFrame()
         result_html = result_df.to_html(classes='dataframe table table-striped', index=True)
         
         # dump results to a log file for later analysis
