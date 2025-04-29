@@ -15,7 +15,8 @@ from pathlib import Path
 
 import pandas as pd
 from thermo.chemical import Chemical
-
+from rdkit import Chem
+from rdkit.Chem import Descriptors
 from utils import get_descs, drop_overlap, DROP_WATER
 
 
@@ -26,10 +27,17 @@ if DROP_WATER:
     bigsol_data = bigsol_data[~bigsol_data["Solvent"].isin(("water", ))]
 print(len(bigsol_data), "<--- number of samples without PEG")
 
+def smiles_to_mw(smiles):
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None  # invalid SMILES
+    return Descriptors.MolWt(mol)
 
 # convert the mol fraction to concentration
 def _fraction_to_molarity(row):
     name = row["Solvent"]
+    solute = row["Solute"]
+    solute_mw = smiles_to_mw(solute)
     if name == "THF":
         name = "tetrahydrofuran"
     elif name == "n-heptane":
@@ -48,7 +56,7 @@ def _fraction_to_molarity(row):
         print(f"Could not find chemical name {name}.")
         return pd.NA
     try:
-        return log10(row["Solubility"] / (m.MW / m.rho))
+        return log10((row["Solubility"] *m.rho)/ (m.mW*(1-row["Solubility"]) + (row["Solubility"])*solute_mw))
     except TypeError as e:
         print(name, "could not be estimated.")
         print(str(e))
