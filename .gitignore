@@ -15,6 +15,7 @@ slurm*err
 slurm*out
 aqsol
 dev
+paper/demo_output
 # WIP
 fastprop_sobolev*
 data/dortmund.py
@@ -22,6 +23,8 @@ final_results/
 best_pre_tloss/
 *.zip
 *.pptx
+paper/models/chemberta/logs
+paper/models/chemberta/results
 
 # typical Python gitignore from: https://github.com/github/gitignore/blob/main/Python.gitignore
 
