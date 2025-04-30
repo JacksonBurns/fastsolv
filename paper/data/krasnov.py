@@ -36,7 +36,7 @@ def smiles_to_mw(smiles):
 # convert the mol fraction to concentration
 def _fraction_to_molarity(row):
     name = row["Solvent"]
-    solute = row["Solute"]
+    solute = row["SMILES"]
     solute_mw = smiles_to_mw(solute)
     if name == "THF":
         name = "tetrahydrofuran"
