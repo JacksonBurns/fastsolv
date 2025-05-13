@@ -22,7 +22,7 @@ file = "README.md"
 content-type = "text/markdown"
 
 [project.scripts]
-fastsolv = "fastsolv:fastsolv_predict"
+fastsolv = "fastsolv._cli:_fastsolv_predict"
 
 [tool.isort]
 profile = "black"
