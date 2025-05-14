@@ -12,7 +12,7 @@ def _fastsolv_predict(parser=None):
         parser = argparse.ArgumentParser(
             description="fastsolv solid solubility predictor CLI.",
             epilog="Example: fastsolv input.csv -o predictions.csv",
-            formatter_class=argparse.ArgumentDefaultsHelpFormatter 
+            formatter_class=argparse.ArgumentDefaultsHelpFormatter
         )
         parser.add_argument(
             "-v", "--version",
@@ -21,8 +21,8 @@ def _fastsolv_predict(parser=None):
         )
         parser.add_argument(
             "input",
-            nargs='?',  
-            default=None, 
+            nargs='?',
+            default=None,
             help="Path to the input CSV file. Required unless --version is used. "
                  "The CSV must contain 'solvent_smiles', 'solute_smiles', and 'temperature' (in Kelvin) columns."
         )
@@ -35,7 +35,7 @@ def _fastsolv_predict(parser=None):
     args = parser.parse_args()
 
     if args.version:
-        printversion("fastsolv"))
+        print(version("fastsolv"))
         sys.exit(0)
 
     # If not asking for version, input file is mandatory
