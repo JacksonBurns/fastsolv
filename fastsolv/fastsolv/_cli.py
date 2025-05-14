@@ -35,7 +35,7 @@ def _fastsolv_predict(parser=None):
     args = parser.parse_args()
 
     if args.version:
-        print(f"fastsolv version {version('fastsolv')}")
+        printversion("fastsolv"))
         sys.exit(0)
 
     # If not asking for version, input file is mandatory
