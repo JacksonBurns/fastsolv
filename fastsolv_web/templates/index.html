@@ -3,94 +3,197 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>fastsolv Solid Solubility Predictor</title>
+    <title>fastsolv Solubility Predictor</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
         body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-        }
-        h1 {
-            text-align: center;
-            margin-bottom: 20px;
+            font-family: 'Inter', sans-serif;
+            background-color: #f0fdf4;
         }
         .container {
-            width: 600px;
-            margin: 0 auto;
+            max-width: 800px;
         }
-        .static-explanation {
-            background-color: #f9f9f9;
-            border: 1px solid #ccc;
-            padding: 10px;
-            margin-bottom: 20px;
+        .form-group {
+            position: relative;
         }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
+        .form-group input, .form-group textarea {
+            transition: all 0.3s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
-        .grid input {
-            padding: 10px;
-        }
-        .submit-btn-container {
-            text-align: center;  /* Center the submit button */
-            margin-top: 20px;
+        .form-group input:focus, .form-group textarea:focus {
+            border-color: #15803d;
+            box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2);
+            outline: none;
         }
         .submit-btn {
-            padding: 10px 20px;
-            background-color: #007BFF;
-            color: white;
-            border: none;
-            cursor: pointer;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
         }
         .submit-btn:hover {
-            background-color: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
-        .result-table {
-            margin-top: 20px;
+        .card {
+            transition: transform 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+        }
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: #f0fdf4;
+            border-radius: 10px;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background: #15803d;
+            border-radius: 10px;
+        }
+        textarea::-webkit-scrollbar-thumb:hover {
+            background: #0c4a1e;
         }
     </style>
 </head>
-<body>
+<body class="p-6 md:p-10 flex items-center justify-center min-h-screen">
 
-<div class="container">
-    <h1>fastsolv Solid Solubility Predictor</h1>
-    
-    <!-- Static explanation text box -->
-    <div class="static-explanation">
-        <p>
-            This site provides free access to the fastsolv solid solubility prediction model described in DOI.
-            Contact jwburns|@|mit.edu for any issues.
-            <br>
-            To run predictions on more than 10 samples at a time please install and run fastprop locally, see github.com/jacksonburns/fastsolv.
-            <br>
-            Please cite the companion paper |10.26434/chemrxiv-2024-93qp3| if you use these predictions in published work.
-        </p>
-    </div>
+    <div class="container bg-white p-8 rounded-2xl shadow-xl space-y-8 flex flex-col">
+        <header class="text-center">
+            <h1 class="text-4xl font-bold text-gray-800 animate-fade-in-down">fastsolv Solubility Predictor</h1>
+            <p class="text-gray-500 mt-2 text-lg">Simple tool for predicting solubility of small molecules.</p>
+        </header>
 
-    <form method="POST">
-        <div class="grid">
-            <!-- Generate 10x3 grid of text inputs with specific placeholders for columns -->
-            {% for i in range(10) %}
-                <input type="text" name="field_{{ i }}_0" placeholder="Solute Smiles"> 
-                <input type="text" name="field_{{ i }}_1" placeholder="Solvent Smiles"> 
-                <input type="text" name="field_{{ i }}_2" placeholder="Temperature (Kelvin)"> 
-            {% endfor %}
+        <!-- Static explanation text box -->
+        <div class="p-6 bg-green-50 rounded-xl border border-green-200 text-green-800 space-y-2 card">
+            <p>
+                This site provides free access to the fastsolv solubility prediction model described in DOI <code>|10.26434/chemrxiv-2024-93qp3|</code>.
+                Contact jwburns|@|mit.edu for any issues.
+            </p>
+            <p>
+                To make predictions, enter solute SMILES in the field on the left and solvent SMILES in the field on the right, then finally enter your desired temperature range.
+                Click Run Prediction to generate results, which are then made available in a Comma Separated Values (csv) format.
+                To install fastsolv locally for faster inference and more customization, see 
+                <a href="https://github.com/jacksonburns/fastsolv" class="text-green-600 hover:text-green-800 font-semibold" target="_blank">github.com/jacksonburns/fastsolv</a>.
+            </p>
+            <p>
+                Please cite the companion paper <code>|10.26434/chemrxiv-2024-93qp3|</code> if you use these predictions in published scientific work.
+            </p>
+            <div class="mt-4">
+                <h3 class="font-bold text-green-900">Common Solvents for Copy/Paste:</h3>
+                <ul class="list-disc list-inside mt-1 ml-4 text-sm">
+                    <li>Acetone: CC(=O)C</li>
+                    <li>Methanol: CO</li>
+                    <li>Ethanol: CCO</li>
+                    <li>Toluene: Cc1ccccc1</li>
+                    <li>Dimethyl sulfoxide (DMSO): CS(=O)C</li>
+                    <li>Acetonitrile: CC#N</li>
+                    <li>Ethyl acetate: CCOC(=O)C</li>
+                </ul>
+            </div>
         </div>
+
+        <!-- Input Form -->
+        <form method="POST" class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Solute SMILES Input -->
+                <div class="form-group flex flex-col">
+                    <label for="solute_smiles" class="text-gray-700 font-semibold mb-1">Solute Smiles (one per line)</label>
+                    <textarea id="solute_smiles" name="solute_smiles" required rows="5"
+                           class="p-3 border border-gray-300 rounded-lg focus:border-green-600"></textarea>
+                </div>
+
+                <!-- Solvent SMILES Input -->
+                <div class="form-group flex flex-col">
+                    <label for="solvent_smiles" class="text-gray-700 font-semibold mb-1">Solvent Smiles (one per line)</label>
+                    <textarea id="solvent_smiles" name="solvent_smiles" required rows="5"
+                           class="p-3 border border-gray-300 rounded-lg focus:border-green-600"></textarea>
+                </div>
+            </div>
+
+            <!-- Temperature Input Options -->
+            <div class="bg-gray-100 p-6 rounded-xl space-y-4">
+                <p class="text-gray-700 font-semibold">Temperature Settings:</p>
+                
+                <div id="range-temp-inputs" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="form-group">
+                        <label for="min_temp" class="text-gray-700 mb-1">Min Temp (K)</label>
+                        <input type="number" step="5" id="min_temp" name="min_temp" value="250"
+                               class="w-full p-3 border border-gray-300 rounded-lg">
+                    </div>
+                    <div class="form-group">
+                        <label for="max_temp" class="text-gray-700 mb-1">Max Temp (K)</label>
+                        <input type="number" step="5" id="max_temp" name="max_temp" value="350"
+                               class="w-full p-3 border border-gray-300 rounded-lg">
+                    </div>
+                    <div class="form-group">
+                        <label for="num_points" class="text-gray-700 mb-1">Number of Points</label>
+                        <input type="number" id="num_points" name="num_points" value="10"
+                               class="w-full p-3 border border-gray-300 rounded-lg" max="50">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submit Button -->
+            <div class="text-center">
+                <button type="submit"
+                        class="submit-btn px-8 py-3 bg-green-600 text-white font-bold rounded-full text-lg hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-500 focus:ring-opacity-50">
+                    Run Prediction
+                </button>
+            </div>
+        </form>
+
+        <!-- Display results if they exist -->
+        {% if results %}
+        <div class="mt-8 space-y-6">
+
+            <!-- CSV Output Section -->
+            <div class="bg-gray-100 p-6 rounded-xl card">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4 text-center">CSV Results</h2>
+                <textarea id="csv-textarea" readonly rows="10" class="w-full p-4 font-mono text-sm bg-white rounded-lg border border-gray-300 shadow-inner resize-none focus:outline-none focus:ring-2 focus:ring-green-600">{{ results.csv|safe }}</textarea>
+                <div class="text-center mt-4">
+                    <button id="copy-btn"
+                            class="px-6 py-2 bg-green-600 text-white font-bold rounded-full hover:bg-green-700 focus:outline-none focus:ring-4 focus:ring-green-500 focus:ring-opacity-50">
+                        Copy to Clipboard
+                    </button>
+                    <span id="copy-message" class="ml-4 text-green-600 font-semibold hidden">Copied!</span>
+                </div>
+            </div>
+        </div>
+
+    <script>
+        // JavaScript for handling dynamic form inputs and data
         
-        <!-- Center the submit button -->
-        <div class="submit-btn-container">
-            <button type="submit" class="submit-btn">Submit</button>
-        </div>
-    </form>
+        // Hide/show temperature inputs based on radio button selection
+        const rangeTempInputs = document.getElementById('range-temp-inputs');
+        const minTempInput = document.getElementById('min_temp');
+        const maxTempInput = document.getElementById('max_temp');
+        const numPointsInput = document.getElementById('num_points');
+        minTempInput.required = true;
+        maxTempInput.required = true;
+        numPointsInput.required = true;
 
-    <!-- Display the resulting DataFrame -->
-    {% if result %}
-        <div class="result-table">
-            <h2>Results:</h2>
-            {{ result|safe }}
-        </div>
+        // Copy to clipboard functionality
+        const copyBtn = document.getElementById('copy-btn');
+        const copyMessage = document.getElementById('copy-message');
+        const csvTextarea = document.getElementById('csv-textarea');
+        
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                csvTextarea.select();
+                try {
+                    document.execCommand('copy');
+                    copyMessage.classList.remove('hidden');
+                    setTimeout(() => {
+                        copyMessage.classList.add('hidden');
+                    }, 2000);
+                } catch (err) {
+                    console.error('Failed to copy text: ', err);
+                }
+            });
+        }
+    </script>
     {% endif %}
-</div>
-
 </body>
 </html>
